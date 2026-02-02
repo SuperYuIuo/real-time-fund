@@ -3,18 +3,20 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
+const ANNOUNCEMENT_KEY = 'hasClosedAnnouncement_v2';
+
 export default function Announcement() {
   const [isVisible, setIsVisible] = useState(false);
 
   useEffect(() => {
-    const hasClosed = localStorage.getItem('hasClosedAnnouncement_v1');
+    const hasClosed = localStorage.getItem(ANNOUNCEMENT_KEY);
     if (!hasClosed) {
       setIsVisible(true);
     }
   }, []);
 
   const handleClose = () => {
-    localStorage.setItem('hasClosedAnnouncement_v1', 'true');
+    localStorage.setItem(ANNOUNCEMENT_KEY, 'true');
     setIsVisible(false);
   };
 
@@ -62,7 +64,9 @@ export default function Announcement() {
             </div>
             
             <div style={{ color: 'var(--text)', lineHeight: '1.6', fontSize: '15px' }}>
-              已解决并发刷新导致数据错乱问题，遇到有问题的数据可以删除后重新添加，抱歉给您带来的不便。
+              感谢大家反馈的需求，现已增加如下功能：
+              <p>1. 基金录入支持模糊搜索多选。</p>
+              <p>2. 设置弹框内新增数据导入/导出，以便在不同设备同步。</p>
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '8px' }}>
