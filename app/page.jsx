@@ -816,20 +816,94 @@ function TradeModal({ type, fund, onClose, onConfirm }) {
 }
 
 function HoldingEditModal({ fund, holding, onClose, onSave }) {
-  const [share, setShare] = useState(holding?.share || '');
-  const [cost, setCost] = useState(holding?.cost || '');
+  const [mode, setMode] = useState('amount'); // 'amount' | 'share'
+  
+  // 基础数据
+  const dwjz = fund?.dwjz || fund?.gsz || 0;
+  
+  // 表单状态
+  const [share, setShare] = useState('');
+  const [cost, setCost] = useState('');
+  const [amount, setAmount] = useState('');
+  const [profit, setProfit] = useState('');
+
+  // 初始化数据
+  useEffect(() => {
+    if (holding) {
+      const s = holding.share || 0;
+      const c = holding.cost || 0;
+      setShare(String(s));
+      setCost(String(c));
+      
+      if (dwjz > 0) {
+        const a = s * dwjz;
+        const p = (dwjz - c) * s;
+        setAmount(a.toFixed(2));
+        setProfit(p.toFixed(2));
+      }
+    }
+  }, [holding, fund]);
+
+  // 切换模式时同步数据
+  const handleModeChange = (newMode) => {
+    if (newMode === mode) return;
+    setMode(newMode);
+    
+    if (newMode === 'share') {
+      // 从金额/收益 -> 份额/成本
+      if (amount && dwjz > 0) {
+        const a = parseFloat(amount);
+        const p = parseFloat(profit || 0);
+        const s = a / dwjz;
+        const principal = a - p;
+        const c = s > 0 ? principal / s : 0;
+        
+        setShare(s.toFixed(2)); // 保留2位小数，或者更多？基金份额通常2位
+        setCost(c.toFixed(4));
+      }
+    } else {
+      // 从份额/成本 -> 金额/收益
+      if (share && dwjz > 0) {
+        const s = parseFloat(share);
+        const c = parseFloat(cost || 0);
+        const a = s * dwjz;
+        const p = (dwjz - c) * s;
+        
+        setAmount(a.toFixed(2));
+        setProfit(p.toFixed(2));
+      }
+    }
+  };
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (!share || !cost) return; // 简单校验
+    
+    let finalShare = 0;
+    let finalCost = 0;
+
+    if (mode === 'share') {
+      if (!share || !cost) return;
+      finalShare = Number(share);
+      finalCost = Number(cost);
+    } else {
+      if (!amount || !dwjz) return;
+      const a = Number(amount);
+      const p = Number(profit || 0);
+      finalShare = a / dwjz;
+      const principal = a - p;
+      finalCost = finalShare > 0 ? principal / finalShare : 0;
+    }
+
     onSave({
-      share: Number(share),
-      cost: Number(cost)
+      share: finalShare,
+      cost: finalCost
     });
     onClose();
   };
 
-  const isValid = share && cost && !isNaN(share) && !isNaN(cost);
+  const isValid = mode === 'share' 
+    ? (share && cost && !isNaN(share) && !isNaN(cost))
+    : (amount && !isNaN(amount) && (!profit || !isNaN(profit)) && dwjz > 0);
 
   return (
     <motion.div
@@ -862,45 +936,108 @@ function HoldingEditModal({ fund, holding, onClose, onSave }) {
         
         <div style={{ marginBottom: 16 }}>
           <div className="fund-name" style={{ fontWeight: 600, fontSize: '16px', marginBottom: 4 }}>{fund?.name}</div>
-          <div className="muted" style={{ fontSize: '12px' }}>#{fund?.code}</div>
+          <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
+            <div className="muted" style={{ fontSize: '12px' }}>#{fund?.code}</div>
+            <div className="badge" style={{ fontSize: '12px' }}>
+              最新净值：<span style={{ fontWeight: 600, color: 'var(--primary)' }}>{dwjz}</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="tabs-container" style={{ marginBottom: 20, background: 'rgba(255,255,255,0.05)', padding: 4, borderRadius: 12 }}>
+          <div className="row" style={{ gap: 0 }}>
+            <button
+              type="button"
+              className={`tab ${mode === 'amount' ? 'active' : ''}`}
+              onClick={() => handleModeChange('amount')}
+              style={{ flex: 1, justifyContent: 'center', height: 32, borderRadius: 8 }}
+            >
+              按金额
+            </button>
+            <button
+              type="button"
+              className={`tab ${mode === 'share' ? 'active' : ''}`}
+              onClick={() => handleModeChange('share')}
+              style={{ flex: 1, justifyContent: 'center', height: 32, borderRadius: 8 }}
+            >
+              按份额
+            </button>
+          </div>
         </div>
 
         <form onSubmit={handleSubmit}>
-          <div className="form-group" style={{ marginBottom: 16 }}>
-            <label className="muted" style={{ display: 'block', marginBottom: 8, fontSize: '14px' }}>
-              持有份额 <span style={{ color: 'var(--danger)' }}>*</span>
-            </label>
-            <input
-              type="number"
-              step="any"
-              className={`input ${!share ? 'error' : ''}`}
-              value={share}
-              onChange={(e) => setShare(e.target.value)}
-              placeholder="请输入持有份额"
-              style={{ 
-                width: '100%',
-                border: !share ? '1px solid var(--danger)' : undefined
-              }}
-            />
-          </div>
-
-          <div className="form-group" style={{ marginBottom: 24 }}>
-            <label className="muted" style={{ display: 'block', marginBottom: 8, fontSize: '14px' }}>
-              持仓成本价 <span style={{ color: 'var(--danger)' }}>*</span>
-            </label>
-            <input
-              type="number"
-              step="any"
-              className={`input ${!cost ? 'error' : ''}`}
-              value={cost}
-              onChange={(e) => setCost(e.target.value)}
-              placeholder="请输入持仓成本价"
-              style={{ 
-                width: '100%',
-                border: !cost ? '1px solid var(--danger)' : undefined
-              }}
-            />
-          </div>
+          {mode === 'amount' ? (
+            <>
+              <div className="form-group" style={{ marginBottom: 16 }}>
+                <label className="muted" style={{ display: 'block', marginBottom: 8, fontSize: '14px' }}>
+                  持有金额 <span style={{ color: 'var(--danger)' }}>*</span>
+                </label>
+                <input
+                  type="number"
+                  step="any"
+                  className={`input ${!amount ? 'error' : ''}`}
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
+                  placeholder="请输入持有总金额"
+                  style={{ 
+                    width: '100%',
+                    border: !amount ? '1px solid var(--danger)' : undefined
+                  }}
+                />
+              </div>
+              <div className="form-group" style={{ marginBottom: 24 }}>
+                <label className="muted" style={{ display: 'block', marginBottom: 8, fontSize: '14px' }}>
+                  持有收益
+                </label>
+                <input
+                  type="number"
+                  step="any"
+                  className="input"
+                  value={profit}
+                  onChange={(e) => setProfit(e.target.value)}
+                  placeholder="请输入持有总收益 (可为负)"
+                  style={{ width: '100%' }}
+                />
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="form-group" style={{ marginBottom: 16 }}>
+                <label className="muted" style={{ display: 'block', marginBottom: 8, fontSize: '14px' }}>
+                  持有份额 <span style={{ color: 'var(--danger)' }}>*</span>
+                </label>
+                <input
+                  type="number"
+                  step="any"
+                  className={`input ${!share ? 'error' : ''}`}
+                  value={share}
+                  onChange={(e) => setShare(e.target.value)}
+                  placeholder="请输入持有份额"
+                  style={{ 
+                    width: '100%',
+                    border: !share ? '1px solid var(--danger)' : undefined
+                  }}
+                />
+              </div>
+              <div className="form-group" style={{ marginBottom: 24 }}>
+                <label className="muted" style={{ display: 'block', marginBottom: 8, fontSize: '14px' }}>
+                  持仓成本价 <span style={{ color: 'var(--danger)' }}>*</span>
+                </label>
+                <input
+                  type="number"
+                  step="any"
+                  className={`input ${!cost ? 'error' : ''}`}
+                  value={cost}
+                  onChange={(e) => setCost(e.target.value)}
+                  placeholder="请输入持仓成本价"
+                  style={{ 
+                    width: '100%',
+                    border: !cost ? '1px solid var(--danger)' : undefined
+                  }}
+                />
+              </div>
+            </>
+          )}
 
           <div className="row" style={{ gap: 12 }}>
             <button type="button" className="button secondary" onClick={onClose} style={{ flex: 1, background: 'rgba(255,255,255,0.05)', color: 'var(--text)' }}>取消</button>
