@@ -1571,9 +1571,20 @@ export default function HomePage() {
   const [percentModes, setPercentModes] = useState({}); // { [code]: boolean }
   const [isTradingDay, setIsTradingDay] = useState(true); // 默认为交易日，通过接口校正
   const tabsRef = useRef(null);
+  const [fundDeleteConfirm, setFundDeleteConfirm] = useState(null); // { code, name }
 
   const today = new Date();
   const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const checkMobile = () => setIsMobile(window.innerWidth <= 640);
+      checkMobile();
+      window.addEventListener('resize', checkMobile);
+      return () => window.removeEventListener('resize', checkMobile);
+    }
+  }, []);
 
   // 检查交易日状态
   const checkTradingDay = () => {
@@ -2320,6 +2331,16 @@ export default function HomePage() {
     setViewMode(nextMode);
     localStorage.setItem('viewMode', nextMode);
   };
+ 
+  const requestRemoveFund = (fund) => {
+    const h = holdings[fund.code];
+    const hasHolding = h && typeof h.share === 'number' && h.share > 0;
+    if (hasHolding) {
+      setFundDeleteConfirm({ code: fund.code, name: fund.name });
+    } else {
+      removeFund(fund.code);
+    }
+  };
 
   const addFund = async (e) => {
     e?.preventDefault?.();
@@ -2588,7 +2609,8 @@ export default function HomePage() {
       actionModal.open ||
       tradeModal.open ||
       !!clearConfirm ||
-      donateOpen;
+      donateOpen ||
+      !!fundDeleteConfirm;
     
     if (isAnyModalOpen) {
       document.body.style.overflow = 'hidden';
@@ -2969,6 +2991,16 @@ export default function HomePage() {
                 className={viewMode === 'card' ? 'grid' : 'table-container glass'}
               >
                 <div className={viewMode === 'card' ? 'grid col-12' : ''} style={viewMode === 'card' ? { gridColumn: 'span 12', gap: 16 } : {}}>
+                  {viewMode === 'list' && (
+                    <div className="table-header-row">
+                      <div className="table-header-cell">基金名称</div>
+                      <div className="table-header-cell text-right">净值/估值</div>
+                      <div className="table-header-cell text-right">涨跌幅</div>
+                      <div className="table-header-cell text-right">更新时间</div>
+                      <div className="table-header-cell text-right">当日盈亏</div>
+                      <div className="table-header-cell text-center">操作</div>
+                    </div>
+                  )}
                   <AnimatePresence mode="popLayout">
                     {displayFunds.map((f) => (
                       <motion.div
@@ -2979,8 +3011,38 @@ export default function HomePage() {
                         animate={{ opacity: 1, scale: 1 }}
                         exit={{ opacity: 0, scale: 0.95 }}
                         transition={{ duration: 0.2 }}
+                        style={{ position: 'relative', overflow: 'hidden' }}
                       >
-                      <div className={viewMode === 'card' ? 'glass card' : 'table-row'}>
+                      {viewMode === 'list' && isMobile && (
+                        <div 
+                          className="swipe-action-bg"
+                          onClick={() => requestRemoveFund(f)}
+                        >
+                          <TrashIcon width="18" height="18" />
+                          <span>删除</span>
+                        </div>
+                      )}
+                      <motion.div 
+                        className={viewMode === 'card' ? 'glass card' : 'table-row'}
+                        drag={viewMode === 'list' && isMobile ? "x" : false}
+                        dragConstraints={{ left: -80, right: 0 }}
+                        dragElastic={0.1}
+                        onDragEnd={(e, { offset, velocity }) => {
+                          if (viewMode === 'list' && isMobile) {
+                             if (offset.x < -40) {
+                               // 可以在这里触发确认或者仅仅是保持打开状态
+                               // 但简单的实现通常是拖动超过阈值后自动回弹或者直接触发（如果想模仿某些App直接删除）
+                               // 这里的实现是：用户可以拖动露出后面的按钮，点击按钮删除。
+                               // framer motion 的 dragConstraints 会自动处理回弹，如果没设置 dragSnapToOrigin
+                             }
+                          }
+                        }}
+                        style={{ 
+                          background: viewMode === 'list' ? 'var(--bg)' : undefined,
+                          position: 'relative',
+                          zIndex: 1 
+                        }}
+                      >
                         {viewMode === 'list' ? (
                           <>
                             <div className="table-cell name-cell">
@@ -3008,7 +3070,27 @@ export default function HomePage() {
                                 </button>
                               )}
                               <div className="title-text">
-                                <span className="name-text">{f.name}</span>
+                            <span className="name-text" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                              {f.name}
+                              {f.jzrq === todayStr && (
+                                <span 
+                                  title="今日净值已更新" 
+                                  style={{ 
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    width: 16, 
+                                    height: 16, 
+                                    borderRadius: '50%', 
+                                    background: 'rgba(34, 197, 94, 0.2)', 
+                                    color: '#22c55e',
+                                    fontSize: '10px'
+                                  }}
+                                >
+                                  ✓
+                                </span>
+                              )}
+                            </span>
                                 <span className="muted code-text">#{f.code}</span>
                               </div>
                             </div>
@@ -3027,7 +3109,7 @@ export default function HomePage() {
                                     </div>
                                     <div className="table-cell text-right change-cell">
                                       <span className={f.zzl > 0 ? 'up' : f.zzl < 0 ? 'down' : ''} style={{ fontWeight: 700 }}>
-                                        {f.zzl !== undefined ? `${f.zzl > 0 ? '+' : ''}${Number(f.zzl).toFixed(2)}%` : '--'}
+                                        {f.zzl !== undefined ? `${f.zzl > 0 ? '+' : ''}${Number(f.zzl).toFixed(2)}%` : ''}
                                       </span>
                                     </div>
                                   </>
@@ -3051,10 +3133,29 @@ export default function HomePage() {
                             <div className="table-cell text-right time-cell">
                               <span className="muted" style={{ fontSize: '12px' }}>{f.gztime || f.time || '-'}</span>
                             </div>
+                            {(() => {
+                              const holding = holdings[f.code];
+                              const profit = getHoldingProfit(f, holding);
+                              const profitValue = profit ? profit.profitToday : null;
+                              const hasProfit = profitValue !== null;
+                              
+                              return (
+                                <div className="table-cell text-right profit-cell">
+                                  <span 
+                                    className={hasProfit ? (profitValue > 0 ? 'up' : profitValue < 0 ? 'down' : '') : 'muted'} 
+                                    style={{ fontWeight: 700 }}
+                                  >
+                                    {hasProfit 
+                                      ? `${profitValue > 0 ? '+' : profitValue < 0 ? '-' : ''}¥${Math.abs(profitValue).toFixed(2)}`
+                                      : ''}
+                                  </span>
+                                </div>
+                              );
+                            })()}
                             <div className="table-cell text-center action-cell" style={{ gap: 4 }}>
                               <button
                                 className="icon-button danger"
-                                onClick={() => removeFund(f.code)}
+                                onClick={() => requestRemoveFund(f)}
                                 title="删除"
                                 style={{ width: '28px', height: '28px' }}
                               >
@@ -3125,7 +3226,7 @@ export default function HomePage() {
                               <div className="row" style={{ gap: 4 }}>
                                 <button
                                   className="icon-button danger"
-                                  onClick={() => removeFund(f.code)}
+                                  onClick={() => requestRemoveFund(f)}
                                   title="删除"
                                   style={{ width: '28px', height: '28px' }}
                                 >
@@ -3148,7 +3249,7 @@ export default function HomePage() {
                               return (
                                 <Stat 
                                   label="涨跌幅" 
-                                  value={f.zzl !== undefined ? `${f.zzl > 0 ? '+' : ''}${Number(f.zzl).toFixed(2)}%` : '--'} 
+                                  value={f.zzl !== undefined ? `${f.zzl > 0 ? '+' : ''}${Number(f.zzl).toFixed(2)}%` : ''}
                                   delta={f.zzl} 
                                 />
                               );
@@ -3283,7 +3384,7 @@ export default function HomePage() {
                           </AnimatePresence>
                         </>
                       )}
-                      </div>
+                      </motion.div>
                     </motion.div>
                   ))}
                 </AnimatePresence>
@@ -3294,6 +3395,21 @@ export default function HomePage() {
           )}
         </div>
       </div>
+
+      <AnimatePresence>
+        {fundDeleteConfirm && (
+          <ConfirmModal
+            title="删除确认"
+            message={`基金 "${fundDeleteConfirm.name}" 存在持仓记录。删除后将移除该基金及其持仓数据，是否继续？`}
+            confirmText="确定删除"
+            onConfirm={() => {
+              removeFund(fundDeleteConfirm.code);
+              setFundDeleteConfirm(null);
+            }}
+            onCancel={() => setFundDeleteConfirm(null)}
+          />
+        )}
+      </AnimatePresence>
 
       <div className="footer">
         <p style={{ marginBottom: 8 }}>数据源：实时估值与重仓直连东方财富，仅供个人学习及参考使用。数据可能存在延迟，不作为任何投资建议</p>
