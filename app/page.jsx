@@ -2265,38 +2265,86 @@ export default function HomePage() {
         });
 
         const holdingsPromise = new Promise((resolveH) => {
-          const holdingsUrl = `https://fundf10.eastmoney.com/FundArchivesDatas.aspx?type=jjcc&code=${c}&topline=10&year=&month=&rt=${Date.now()}`;
+          const holdingsUrl = `https://fundf10.eastmoney.com/FundArchivesDatas.aspx?type=jjcc&code=${c}&topline=10&year=&month=&_=${Date.now()}`;
           loadScript(holdingsUrl).then(async () => {
             let holdings = [];
             const html = window.apidata?.content || '';
-            const rows = html.match(/<tr[\s\S]*?<\/tr>/gi) || [];
-            for (const r of rows) {
-              const cells = (r.match(/<td[\s\S]*?>([\s\S]*?)<\/td>/gi) || []).map(td => td.replace(/<[^>]*>/g, '').trim());
-              const codeIdx = cells.findIndex(txt => /^\d{6}$/.test(txt));
-              const weightIdx = cells.findIndex(txt => /\d+(?:\.\d+)?\s*%/.test(txt));
-              if (codeIdx >= 0 && weightIdx >= 0) {
-                holdings.push({
-                  code: cells[codeIdx],
-                  name: cells[codeIdx + 1] || '',
-                  weight: cells[weightIdx],
-                  change: null
-                });
+            const headerRow = (html.match(/<thead[\s\S]*?<tr[\s\S]*?<\/tr>[\s\S]*?<\/thead>/i) || [])[0] || '';
+            const headerCells = (headerRow.match(/<th[\s\S]*?>([\s\S]*?)<\/th>/gi) || []).map(th => th.replace(/<[^>]*>/g, '').trim());
+            let idxCode = -1, idxName = -1, idxWeight = -1;
+            headerCells.forEach((h, i) => {
+              const t = h.replace(/\s+/g, '');
+              if (idxCode < 0 && (t.includes('股票代码') || t.includes('证券代码'))) idxCode = i;
+              if (idxName < 0 && (t.includes('股票名称') || t.includes('证券名称'))) idxName = i;
+              if (idxWeight < 0 && (t.includes('占净值比例') || t.includes('占比'))) idxWeight = i;
+            });
+            const rows = html.match(/<tbody[\s\S]*?<\/tbody>/i) || [];
+            const dataRows = rows.length ? rows[0].match(/<tr[\s\S]*?<\/tr>/gi) || [] : html.match(/<tr[\s\S]*?<\/tr>/gi) || [];
+            for (const r of dataRows) {
+              const tds = (r.match(/<td[\s\S]*?>([\s\S]*?)<\/td>/gi) || []).map(td => td.replace(/<[^>]*>/g, '').trim());
+              if (!tds.length) continue;
+              let code = '';
+              let name = '';
+              let weight = '';
+              if (idxCode >= 0 && tds[idxCode]) {
+                const m = tds[idxCode].match(/(\d{6})/);
+                code = m ? m[1] : tds[idxCode];
+              } else {
+                const codeIdx = tds.findIndex(txt => /^\d{6}$/.test(txt));
+                if (codeIdx >= 0) code = tds[codeIdx];
+              }
+              if (idxName >= 0 && tds[idxName]) {
+                name = tds[idxName];
+              } else if (code) {
+                const i = tds.findIndex(txt => txt && txt !== code && !/%$/.test(txt));
+                name = i >= 0 ? tds[i] : '';
+              }
+              if (idxWeight >= 0 && tds[idxWeight]) {
+                const wm = tds[idxWeight].match(/([\d.]+)\s*%/);
+                weight = wm ? `${wm[1]}%` : tds[idxWeight];
+              } else {
+                const wIdx = tds.findIndex(txt => /\d+(?:\.\d+)?\s*%/.test(txt));
+                weight = wIdx >= 0 ? tds[wIdx].match(/([\d.]+)\s*%/)?.[1] + '%' : '';
+              }
+              if (code || name || weight) {
+                holdings.push({ code, name, weight, change: null });
               }
             }
-
             holdings = holdings.slice(0, 10);
-
-            if (holdings.length) {
+            const needQuotes = holdings.filter(h => /^\d{6}$/.test(h.code) || /^\d{5}$/.test(h.code));
+            if (needQuotes.length) {
               try {
-                const tencentCodes = holdings.map(h => `s_${getTencentPrefix(h.code)}${h.code}`).join(',');
+                const tencentCodes = needQuotes.map(h => {
+                  const cd = String(h.code || '');
+                  if (/^\d{6}$/.test(cd)) {
+                    const pfx = cd.startsWith('6') || cd.startsWith('9') ? 'sh' : ((cd.startsWith('4') || cd.startsWith('8')) ? 'bj' : 'sz');
+                    return `s_${pfx}${cd}`;
+                  }
+                  if (/^\d{5}$/.test(cd)) {
+                    return `s_hk${cd}`;
+                  }
+                  return null;
+                }).filter(Boolean).join(',');
+                if (!tencentCodes) {
+                  resolveH(holdings);
+                  return;
+                }
                 const quoteUrl = `https://qt.gtimg.cn/q=${tencentCodes}`;
-
                 await new Promise((resQuote) => {
                   const scriptQuote = document.createElement('script');
                   scriptQuote.src = quoteUrl;
                   scriptQuote.onload = () => {
-                    holdings.forEach(h => {
-                      const varName = `v_s_${getTencentPrefix(h.code)}${h.code}`;
+                    needQuotes.forEach(h => {
+                      const cd = String(h.code || '');
+                      let varName = '';
+                      if (/^\d{6}$/.test(cd)) {
+                        const pfx = cd.startsWith('6') || cd.startsWith('9') ? 'sh' : ((cd.startsWith('4') || cd.startsWith('8')) ? 'bj' : 'sz');
+                        varName = `v_s_${pfx}${cd}`;
+                      } else if (/^\d{5}$/.test(cd)) {
+                        varName = `v_s_hk${cd}`;
+                      } else {
+                        return;
+                      }
                       const dataStr = window[varName];
                       if (dataStr) {
                         const parts = dataStr.split('~');
@@ -2314,9 +2362,7 @@ export default function HomePage() {
                   };
                   document.body.appendChild(scriptQuote);
                 });
-              } catch (e) {
-                console.error('获取股票涨跌幅失败', e);
-              }
+              } catch (e) {}
             }
             resolveH(holdings);
           }).catch(() => resolveH([]));
@@ -3187,8 +3233,10 @@ export default function HomePage() {
                           className="swipe-action-bg"
                           onClick={(e) => {
                             e.stopPropagation(); // 阻止冒泡，防止触发全局收起导致状态混乱
+                            if (refreshing) return;
                             requestRemoveFund(f);
                           }}
+                          style={{ pointerEvents: refreshing ? 'none' : 'auto', opacity: refreshing ? 0.6 : 1 }}
                         >
                           <TrashIcon width="18" height="18" />
                           <span>删除</span>
@@ -3402,9 +3450,10 @@ export default function HomePage() {
                             <div className="table-cell text-center action-cell" style={{ gap: 4 }}>
                               <button
                                 className="icon-button danger"
-                                onClick={() => requestRemoveFund(f)}
+                                onClick={() => !refreshing && requestRemoveFund(f)}
                                 title="删除"
-                                style={{ width: '28px', height: '28px' }}
+                                disabled={refreshing}
+                                style={{ width: '28px', height: '28px', opacity: refreshing ? 0.6 : 1, cursor: refreshing ? 'not-allowed' : 'pointer' }}
                               >
                                 <TrashIcon width="14" height="14" />
                               </button>
@@ -3456,9 +3505,10 @@ export default function HomePage() {
                               <div className="row" style={{ gap: 4 }}>
                                 <button
                                   className="icon-button danger"
-                                  onClick={() => requestRemoveFund(f)}
+                                  onClick={() => !refreshing && requestRemoveFund(f)}
                                   title="删除"
-                                  style={{ width: '28px', height: '28px' }}
+                                  disabled={refreshing}
+                                  style={{ width: '28px', height: '28px', opacity: refreshing ? 0.6 : 1, cursor: refreshing ? 'not-allowed' : 'pointer' }}
                                 >
                                   <TrashIcon width="14" height="14" />
                                 </button>
