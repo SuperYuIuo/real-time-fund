@@ -3358,7 +3358,10 @@ export default function HomePage() {
   };
 
   const syncUserConfig = async (userId, showTip = true) => {
-    if (!userId) return;
+    if (!userId) {
+      showToast(`userId 不存在，请重新登录`, 'error');
+      return;
+    }
     try {
       const payload = collectLocalPayload();
       const now = new Date().toISOString();
