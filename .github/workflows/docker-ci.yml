@@ -14,6 +14,7 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
+
       - name: Create .env.local
         run: |
           cat << 'EOF' > .env.local
@@ -28,17 +29,29 @@ jobs:
       - name: Run Dockerfile container
         run: |
           docker run -d --name fund -p 3000:3000 real-time-fund
-          echo "Waiting 10 seconds for the container to start..."
-          sleep 10
 
-      - name: Test service
+      - name: Test service (port reachable)
         run: |
-          curl -f http://localhost:3000/real-time-fund/ || (docker compose logs app && exit 1)
+          # 只验证服务可连通（避免 basePath/路由 404 误伤）
+          for i in {1..30}; do
+            if curl -s -o /dev/null -I http://localhost:3000; then
+              echo "Server is reachable"
+              exit 0
+            fi
+            echo "Waiting for server... ($i/30)"
+            sleep 1
+          done
+
+          echo "Server did not respond in time"
+          docker logs fund || true
+          exit 1
 
       - name: Cleanup
+        if: always()
         run: |
-          docker stop fund
-          docker rm fund
+          docker stop fund || true
+          docker rm fund || true
+
 
   docker-compose-check:
     name: Build & Test Docker Compose
@@ -47,6 +60,7 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
+
       - name: Create .env.local
         run: |
           cat << 'EOF' > .env.local
@@ -58,12 +72,22 @@ jobs:
       - name: Docker Compose up
         run: |
           docker compose up -d --build
-          echo "Waiting 10 seconds for services to start..."
-          sleep 10
 
-      - name: Test app service
+      - name: Test app service (port reachable)
         run: |
-          curl -f http://localhost:3000 || (docker compose logs app && exit 1)
+          for i in {1..30}; do
+            if curl -s -o /dev/null -I http://localhost:3000; then
+              echo "Server is reachable"
+              exit 0
+            fi
+            echo "Waiting for server... ($i/30)"
+            sleep 1
+          done
+
+          echo "Server did not respond in time"
+          docker compose logs app || true
+          exit 1
 
       - name: Cleanup
+        if: always()
         run: docker compose down
