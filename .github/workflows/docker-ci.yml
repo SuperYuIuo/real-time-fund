@@ -33,7 +33,7 @@ jobs:
 
       - name: Test service
         run: |
-          curl -f http://localhost:3000 || (docker logs fund && exit 1)
+          curl -f http://localhost:3000/real-time-fund/ || (docker compose logs app && exit 1)
 
       - name: Cleanup
         run: |
