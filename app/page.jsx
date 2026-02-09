@@ -2915,11 +2915,12 @@ export default function HomePage() {
     }
   };
 
-  const refreshAll = async (codes) => {
+   const refreshAll = async (codes) => {
     if (refreshingRef.current) return;
     refreshingRef.current = true;
     setRefreshing(true);
     const uniqueCodes = Array.from(new Set(codes));
+
     try {
       const updated = [];
       for (const c of uniqueCodes) {
@@ -2937,9 +2938,57 @@ export default function HomePage() {
         }
       }
 
+      // ====== 新增：关联板块（行业）逻辑 ======
+      // 1) 收集本轮更新基金的前10重仓股代码
+      const allStockCodes = [];
+      updated.forEach((f) => {
+        if (Array.isArray(f?.holdings)) {
+          f.holdings.slice(0, 10).forEach((h) => {
+            const cd = String(h?.code || '').trim();
+            if (/^\d{6}$/.test(cd)) allStockCodes.push(cd);
+          });
+        }
+      });
+
+      // 2) 懒加载构建 stock->行业板块映射（有缓存/按需停止）
+      // 3) 获取行业板块实时涨幅（全局缓存 60s）
+      let stockToPlates = {};
+      let plateQuotes = [];
+      try {
+        stockToPlates = await ensureStockToIndustryPlateMap(allStockCodes, {
+          concurrency: 3,
+          maxPlatesToScan: 200
+        });
+        plateQuotes = await fetchIndustryPlateQuotes();
+      } catch (e) {
+        console.warn('关联板块数据获取失败（将降级为不展示）', e);
+      }
+
+      // 4) 聚合每只基金 Top3 关联板块，并写入 fund.relatedPlates
+      if (plateQuotes?.length) {
+        updated.forEach((f) => {
+          try {
+            const related = aggregateIndustryPlatesForFund(
+              f?.holdings || [],
+              stockToPlates,
+              plateQuotes,
+              3
+            );
+            f.relatedPlates = related;
+          } catch {
+            f.relatedPlates = [];
+          }
+        });
+      } else {
+        // 降级：不展示
+        updated.forEach((f) => {
+          if (!Array.isArray(f.relatedPlates)) f.relatedPlates = [];
+        });
+      }
+      // ====== 新增结束 ======
+
       if (updated.length > 0) {
         setFunds(prev => {
-          // 将更新后的数据合并回当前最新的 state 中，防止覆盖掉刚刚导入的数据
           const merged = [...prev];
           updated.forEach(u => {
             const idx = merged.findIndex(f => f.code === u.code);
@@ -2961,7 +3010,7 @@ export default function HomePage() {
       setRefreshing(false);
       try {
         await processPendingQueue();
-      }catch (e) {
+      } catch (e) {
         showToast('待交易队列计算出错', 'error')
       }
     }
