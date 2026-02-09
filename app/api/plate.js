@@ -64,6 +64,17 @@ function jsonp(url, cbParam = 'cb', timeoutMs = 8000) {
   return p;
 }
 
+
+// 尝试兼容不同接口的 JSONP 参数命名：优先 callback=，失败再退回 cb=
+async function jsonpSmart(url, timeoutMs = 8000) {
+  try {
+    return await jsonp(url, 'callback', timeoutMs);
+  } catch (e1) {
+    return await jsonp(url, 'cb', timeoutMs);
+  }
+}
+
+
 /** ---------- localStorage 缓存 ---------- **/
 function loadCache() {
   try {
@@ -111,7 +122,7 @@ export async function fetchIndustryPlateQuotes() {
     'https://push2.eastmoney.com/api/qt/clist/get?pn=1&pz=2000&po=1&np=1&fltt=2&invt=2' +
     '&fid=f3&fs=m:90+t:2&fields=f12,f14,f3';
 
-  const data = await jsonp(base, 'cb', 10000);
+  const data = await jsonpSmart(base, 10000);
   const diff = data?.data?.diff || [];
   const list = diff
     .map((d) => ({
@@ -134,7 +145,7 @@ async function fetchPlateStocks(bkCode, pn = 1, pz = 200) {
     `https://push2.eastmoney.com/api/qt/clist/get?pn=${pn}&pz=${pz}&po=1&np=1&fltt=2&invt=2` +
     `&fs=b:${encodeURIComponent(bkCode)}&fields=f12`;
 
-  const data = await jsonp(url, 'cb', 12000);
+  const data = await jsonpSmart(url, 12000);
   const diff = data?.data?.diff || [];
   const codes = diff
     .map((d) => String(d.f12 || '').trim())
