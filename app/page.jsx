@@ -14,6 +14,7 @@ import githubImg from "./assets/github.svg";
 import weChatGroupImg from "./assets/weChatGroup.png";
 import { supabase, isSupabaseConfigured } from './lib/supabase';
 import { fetchFundData, fetchLatestRelease, fetchShanghaiIndexDate, fetchSmartFundNetValue, searchFunds, submitFeedback } from './api/fund';
+import { fetchIndustryPlateQuotes, ensureStockToIndustryPlateMap, aggregateIndustryPlatesForFund } from './api/plate';
 import packageJson from '../package.json';
 
 dayjs.extend(utc);
