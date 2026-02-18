@@ -4702,12 +4702,13 @@ export default function HomePage() {
                                   {f.noValuation ? (
                                     // 无估值数据的基金，直接显示净值涨跌幅，不显示估值相关字段
                                     <Stat
-                                      label="涨跌幅"
+                                      label="当日涨跌幅"
                                       value={f.zzl !== undefined && f.zzl !== null ? `${f.zzl > 0 ? '+' : ''}${Number(f.zzl).toFixed(2)}%` : '—'}
                                       delta={f.zzl}
                                     />
                                   ) : (
                                     <>
+                                      <Stat label="估值净值" value={f.estPricedCoverage > 0.05 ? f.estGsz.toFixed(4) : (f.gsz ?? '—')} />
                                       {(() => {
                                         const now = nowInTz();
                                         const isAfter9 = now.hour() >= 9;
@@ -4718,13 +4719,12 @@ export default function HomePage() {
 
                                         return (
                                           <Stat
-                                            label="涨跌幅"
+                                            label="当日涨跌幅"
                                             value={f.zzl !== undefined ? `${f.zzl > 0 ? '+' : ''}${Number(f.zzl).toFixed(2)}%` : ''}
                                             delta={f.zzl}
                                           />
                                         );
                                       })()}
-                                      <Stat label="估值净值" value={f.estPricedCoverage > 0.05 ? f.estGsz.toFixed(4) : (f.gsz ?? '—')} />
                                       <Stat
                                         label="估值涨跌幅"
                                         value={f.estPricedCoverage > 0.05 ? `${f.estGszzl > 0 ? '+' : ''}${f.estGszzl.toFixed(2)}%` : (typeof f.gszzl === 'number' ? `${f.gszzl > 0 ? '+' : ''}${f.gszzl.toFixed(2)}%` : f.gszzl ?? '—')}
@@ -4767,7 +4767,6 @@ export default function HomePage() {
                                           <span className="value">¥{profit.amount.toFixed(2)}</span>
                                         </div>
                                         <div className="stat" style={{ flexDirection: 'column', gap: 4, alignItems: 'center', textAlign: 'center' }}>
-                                        <div className="stat" style={{ flexDirection: 'column', gap: 4 }}>
                                           <span className="label">昨日盈亏</span>
                                           <span className={`value ${profit.profitYesterday > 0 ? 'up' : profit.profitYesterday < 0 ? 'down' : ''}`}>
                                             {typeof profit.profitYesterday === 'number'
@@ -4776,39 +4775,6 @@ export default function HomePage() {
                                           </span>
                                         </div>
                                         <div className="stat" style={{ flexDirection: 'column', gap: 4, alignItems: 'center', textAlign: 'center' }}>
-                                        <div className="stat" style={{ flexDirection: 'column', gap: 4 }}>
-                                          <span className="label">昨日盈亏</span>
-                                          <span className={`value ${profit.profitYesterday > 0 ? 'up' : profit.profitYesterday < 0 ? 'down' : ''}`}>
-                                            {typeof profit.profitYesterday === 'number'
-                                              ? `${profit.profitYesterday > 0 ? '+' : profit.profitYesterday < 0 ? '-' : ''}¥${Math.abs(profit.profitYesterday).toFixed(2)}`
-                                              : '—'}
-                                          </span>
-                                        </div>
-                                        <div className="stat" style={{ flexDirection: 'column', gap: 4 }}>
-                                          <span className="label">昨日盈亏</span>
-                                          <span className={`value ${profit.profitYesterday > 0 ? 'up' : profit.profitYesterday < 0 ? 'down' : ''}`}>
-                                            {typeof profit.profitYesterday === 'number'
-                                              ? `${profit.profitYesterday > 0 ? '+' : profit.profitYesterday < 0 ? '-' : ''}¥${Math.abs(profit.profitYesterday).toFixed(2)}`
-                                              : '—'}
-                                          </span>
-                                        </div>
-                                        <div className="stat" style={{ flexDirection: 'column', gap: 4 }}>
-                                          <span className="label">昨日盈亏</span>
-                                          <span className={`value ${profit.profitYesterday > 0 ? 'up' : profit.profitYesterday < 0 ? 'down' : ''}`}>
-                                            {typeof profit.profitYesterday === 'number'
-                                              ? `${profit.profitYesterday > 0 ? '+' : profit.profitYesterday < 0 ? '-' : ''}¥${Math.abs(profit.profitYesterday).toFixed(2)}`
-                                              : '—'}
-                                          </span>
-                                        </div>
-                                        <div className="stat" style={{ flexDirection: 'column', gap: 4 }}>
-                                          <span className="label">昨日盈亏</span>
-                                          <span className={`value ${profit.profitYesterday > 0 ? 'up' : profit.profitYesterday < 0 ? 'down' : ''}`}>
-                                            {typeof profit.profitYesterday === 'number'
-                                              ? `${profit.profitYesterday > 0 ? '+' : profit.profitYesterday < 0 ? '-' : ''}¥${Math.abs(profit.profitYesterday).toFixed(2)}`
-                                              : '—'}
-                                          </span>
-                                        </div>
-                                        <div className="stat" style={{ flexDirection: 'column', gap: 4 }}>
                                           <span className="label">当日盈亏</span>
                                           <span className={`value ${profit.profitToday > 0 ? 'up' : profit.profitToday < 0 ? 'down' : ''}`}>
                                             {profit.profitToday > 0 ? '+' : profit.profitToday < 0 ? '-' : ''}¥{Math.abs(profit.profitToday).toFixed(2)}
@@ -4898,6 +4864,7 @@ export default function HomePage() {
                                 </AnimatePresence>
                                 <FundTrendChart 
                                   code={f.code} 
+                                  holdingCost={typeof holdings[f.code]?.cost === 'number' ? holdings[f.code].cost : null}
                                   isExpanded={!collapsedTrends.has(f.code)}
                                   onToggleExpand={() => toggleTrendCollapse(f.code)}
                                 />
