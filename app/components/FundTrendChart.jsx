@@ -159,32 +159,6 @@ export default function FundTrendChart({ code, isExpanded, onToggleExpand, holdi
         pointHoverRadius: 4,
         fill: true,
         tension: 0.2
-      },
-      ...(costPercent !== null ? [{
-        label: '持仓成本价线',
-        data: data.map(() => costPercent),
-        rawValues: data.map(() => holdingCost),
-        borderColor: '#fbbf24',
-        borderWidth: 1.5,
-        borderDash: [5, 4],
-        pointRadius: 0,
-        pointHoverRadius: 0,
-        fill: false,
-        order: -2
-      }] : []),
-      {
-        label: '单位净值点位',
-        data: percentageData,
-        rawValues: unitValues,
-        borderWidth: 0,
-        pointRadius: 2.8,
-        pointHoverRadius: 5,
-        pointBackgroundColor: '#22d3ee',
-        pointBorderColor: '#0f172a',
-        pointBorderWidth: 1.5,
-        showLine: false,
-        fill: false,
-        order: 0
       }
     ];
 
@@ -419,16 +393,10 @@ export default function FundTrendChart({ code, isExpanded, onToggleExpand, holdi
             style={{ overflow: 'hidden' }}
           >
             <div style={{ position: 'relative', height: 180, width: '100%' }}>
-              {data.length > 0 && (
-                <div style={{ position: 'absolute', left: 0, top: -2, zIndex: 2, display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#22d3ee', display: 'inline-block' }} />
-                  <span className="muted" style={{ fontSize: '10px' }}>单位净值点位</span>
-                </div>
-              )}
               {costMarker && (
-                <div style={{ position: 'absolute', left: 92, top: -2, zIndex: 2, display: 'flex', alignItems: 'center', gap: 6 }}>
+                <div style={{ position: 'absolute', left: 0, top: -2, zIndex: 2, display: 'flex', alignItems: 'center', gap: 6 }}>
                   <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#fbbf24', border: '2px solid #111827', display: 'inline-block' }} />
-                  <span className="muted" style={{ fontSize: '10px' }}>持仓成本价点位/线</span>
+                  <span className="muted" style={{ fontSize: '10px' }}>持仓成本价点位</span>
                 </div>
               )}
               {loading && (
