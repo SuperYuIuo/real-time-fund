@@ -142,6 +142,9 @@ export default function FundTrendChart({ code, isExpanded, onToggleExpand, holdi
     const firstValue = data.length > 0 ? data[0].value : 1;
     const percentageData = data.map(d => ((d.value - firstValue) / firstValue) * 100);
     const unitValues = data.map(d => d.value);
+    const costPercent = (typeof holdingCost === 'number' && !Number.isNaN(holdingCost))
+      ? ((holdingCost - firstValue) / firstValue) * 100
+      : null;
 
     const datasets = [
       {
@@ -162,6 +165,18 @@ export default function FundTrendChart({ code, isExpanded, onToggleExpand, holdi
         fill: true,
         tension: 0.2
       },
+      ...(costPercent !== null ? [{
+        label: '持仓成本价线',
+        data: data.map(() => costPercent),
+        rawValues: data.map(() => holdingCost),
+        borderColor: '#fbbf24',
+        borderWidth: 1.5,
+        borderDash: [5, 4],
+        pointRadius: 0,
+        pointHoverRadius: 0,
+        fill: false,
+        order: -2
+      }] : []),
       {
         label: '单位净值点位',
         data: percentageData,
@@ -418,7 +433,7 @@ export default function FundTrendChart({ code, isExpanded, onToggleExpand, holdi
               {costMarker && (
                 <div style={{ position: 'absolute', left: 92, top: -2, zIndex: 2, display: 'flex', alignItems: 'center', gap: 6 }}>
                   <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#fbbf24', border: '2px solid #111827', display: 'inline-block' }} />
-                  <span className="muted" style={{ fontSize: '10px' }}>持仓成本价点位</span>
+                  <span className="muted" style={{ fontSize: '10px' }}>持仓成本价点位/线</span>
                 </div>
               )}
               {loading && (
