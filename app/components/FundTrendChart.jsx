@@ -125,10 +125,14 @@ export default function FundTrendChart({ code, isExpanded, onToggleExpand, holdi
       }
     }
 
+    const nearestValue = data[nearest.index]?.value;
+    if (typeof nearestValue !== 'number') return null;
+
     return {
       index: nearest.index,
       date: nearest.date,
-      pct: ((holdingCost - data[0].value) / data[0].value) * 100,
+      pct: ((nearestValue - data[0].value) / data[0].value) * 100,
+      nav: nearestValue,
       days: Math.round(holdingDays),
     };
   }, [data, holdingCost, holdingDays]);
@@ -178,7 +182,7 @@ export default function FundTrendChart({ code, isExpanded, onToggleExpand, holdi
       datasets.push({
         label: '持仓成本价点位',
         data: data.map((_, idx) => (idx === costMarker.index ? costMarker.pct : null)),
-        rawValues: data.map((_, idx) => (idx === costMarker.index ? holdingCost : null)),
+        rawValues: data.map((_, idx) => (idx === costMarker.index ? costMarker.nav : null)),
         borderWidth: 0,
         pointRadius: (ctx) => (ctx.dataIndex === costMarker.index ? 6 : 0),
         pointHoverRadius: (ctx) => (ctx.dataIndex === costMarker.index ? 7 : 0),
@@ -347,7 +351,7 @@ export default function FundTrendChart({ code, isExpanded, onToggleExpand, holdi
                }
 
                if (costMarker && index === costMarker.index) {
-                 const costStr = `成本 ${holdingCost.toFixed(4)} (${costMarker.days}天)`;
+                 const costStr = `成本 ${holdingCost.toFixed(4)} / 净值 ${costMarker.nav.toFixed(4)} (${costMarker.days}天)`;
                  const costWidth = ctx.measureText(costStr).width + 10;
                  const costX = Math.max(leftX + costWidth / 2, Math.min(rightX - costWidth / 2, x));
                  const costY = Math.min(bottomY - 10, y + 18);
