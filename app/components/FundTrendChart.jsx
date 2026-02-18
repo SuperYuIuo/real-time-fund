@@ -29,7 +29,7 @@ ChartJS.register(
   Filler
 );
 
-export default function FundTrendChart({ code, isExpanded, onToggleExpand, holdingCost }) {
+export default function FundTrendChart({ code, isExpanded, onToggleExpand, holdingCost, holdingDays }) {
   const [range, setRange] = useState('1m');
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -89,30 +89,49 @@ export default function FundTrendChart({ code, isExpanded, onToggleExpand, holdi
   const lineColor = change >= 0 ? upColor : downColor;
   
   const costMarker = useMemo(() => {
-    if (typeof holdingCost !== 'number' || Number.isNaN(holdingCost) || data.length < 2) return null;
+    if (
+      typeof holdingCost !== 'number' || Number.isNaN(holdingCost) ||
+      typeof holdingDays !== 'number' || Number.isNaN(holdingDays) || holdingDays <= 0 ||
+      data.length < 2
+    ) {
+      return null;
+    }
 
-    for (let i = 0; i < data.length - 1; i += 1) {
-      const current = data[i]?.value;
-      const next = data[i + 1]?.value;
-      if (typeof current !== 'number' || typeof next !== 'number') continue;
+    const targetDate = new Date();
+    targetDate.setHours(0, 0, 0, 0);
+    targetDate.setDate(targetDate.getDate() - Math.round(holdingDays));
 
-      const d1 = current - holdingCost;
-      const d2 = next - holdingCost;
+    const datedPoints = data
+      .map((d, index) => {
+        const pointDate = new Date(`${d.date}T00:00:00`);
+        return Number.isNaN(pointDate.getTime()) ? null : { index, pointDate, date: d.date };
+      })
+      .filter(Boolean);
 
-      // 成本价落在两个净值点之间（含刚好相等）
-      if (d1 === 0 || d2 === 0 || d1 * d2 < 0) {
-        const chosenIndex = Math.abs(d1) <= Math.abs(d2) ? i : i + 1;
-        return {
-          index: chosenIndex,
-          date: data[chosenIndex].date,
-          value: data[chosenIndex].value,
-          pct: ((data[chosenIndex].value - data[0].value) / data[0].value) * 100,
-        };
+    if (!datedPoints.length) return null;
+
+    const startDate = datedPoints[0].pointDate;
+    const endDate = datedPoints[datedPoints.length - 1].pointDate;
+    if (targetDate < startDate || targetDate > endDate) return null;
+
+    let nearest = datedPoints[0];
+    let minDiff = Math.abs(datedPoints[0].pointDate.getTime() - targetDate.getTime());
+
+    for (let i = 1; i < datedPoints.length; i += 1) {
+      const diff = Math.abs(datedPoints[i].pointDate.getTime() - targetDate.getTime());
+      if (diff < minDiff) {
+        minDiff = diff;
+        nearest = datedPoints[i];
       }
     }
 
-    return null;
-  }, [data, holdingCost]);
+    return {
+      index: nearest.index,
+      date: nearest.date,
+      pct: ((holdingCost - data[0].value) / data[0].value) * 100,
+      days: Math.round(holdingDays),
+    };
+  }, [data, holdingCost, holdingDays]);
 
   const chartData = useMemo(() => {
     // Calculate percentage change based on the first data point
@@ -159,7 +178,7 @@ export default function FundTrendChart({ code, isExpanded, onToggleExpand, holdi
       datasets.push({
         label: '持仓成本价点位',
         data: data.map((_, idx) => (idx === costMarker.index ? costMarker.pct : null)),
-        rawValues: data.map((d, idx) => (idx === costMarker.index ? d.value : null)),
+        rawValues: data.map((_, idx) => (idx === costMarker.index ? holdingCost : null)),
         borderWidth: 0,
         pointRadius: (ctx) => (ctx.dataIndex === costMarker.index ? 6 : 0),
         pointHoverRadius: (ctx) => (ctx.dataIndex === costMarker.index ? 7 : 0),
@@ -176,7 +195,7 @@ export default function FundTrendChart({ code, isExpanded, onToggleExpand, holdi
       labels: data.map(d => d.date),
       datasets
     };
-  }, [data, lineColor, costMarker]);
+  }, [data, lineColor, costMarker, holdingCost]);
 
   const options = useMemo(() => {
     return {
@@ -328,7 +347,7 @@ export default function FundTrendChart({ code, isExpanded, onToggleExpand, holdi
                }
 
                if (costMarker && index === costMarker.index) {
-                 const costStr = `成本 ${holdingCost.toFixed(4)}`;
+                 const costStr = `成本 ${holdingCost.toFixed(4)} (${costMarker.days}天)`;
                  const costWidth = ctx.measureText(costStr).width + 10;
                  const costX = Math.max(leftX + costWidth / 2, Math.min(rightX - costWidth / 2, x));
                  const costY = Math.min(bottomY - 10, y + 18);
