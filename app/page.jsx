@@ -962,6 +962,7 @@ function HoldingEditModal({ fund, holding, onClose, onSave }) {
   const [cost, setCost] = useState('');
   const [amount, setAmount] = useState('');
   const [profit, setProfit] = useState('');
+  const [holdingDate, setHoldingDate] = useState('');
 
   // 初始化数据
   useEffect(() => {
@@ -970,6 +971,10 @@ function HoldingEditModal({ fund, holding, onClose, onSave }) {
       const c = holding.cost || 0;
       setShare(String(s));
       setCost(String(c));
+      const derivedDate = holding.holdingDate
+        ? formatDate(holding.holdingDate)
+        : (holding.days ? nowInTz().subtract(Math.round(Number(holding.days) || 0), 'day').format('YYYY-MM-DD') : '');
+      setHoldingDate(derivedDate);
 
       if (dwjz > 0) {
         const a = s * dwjz;
@@ -977,6 +982,12 @@ function HoldingEditModal({ fund, holding, onClose, onSave }) {
         setAmount(a.toFixed(2));
         setProfit(p.toFixed(2));
       }
+    } else {
+      setShare('');
+      setCost('');
+      setAmount('');
+      setProfit('');
+      setHoldingDate('');
     }
   }, [holding, fund]);
 
@@ -1018,11 +1029,11 @@ function HoldingEditModal({ fund, holding, onClose, onSave }) {
     let finalCost = 0;
 
     if (mode === 'share') {
-      if (!share || !cost) return;
+      if (!share || !cost || !holdingDate) return;
       finalShare = Number(Number(share).toFixed(2));
       finalCost = Number(cost);
     } else {
-      if (!amount || !dwjz) return;
+      if (!amount || !dwjz || !holdingDate) return;
       const a = Number(amount);
       const p = Number(profit || 0);
       const rawShare = a / dwjz;
@@ -1033,14 +1044,15 @@ function HoldingEditModal({ fund, holding, onClose, onSave }) {
 
     onSave({
       share: finalShare,
-      cost: finalCost
+      cost: finalCost,
+      holdingDate
     });
     onClose();
   };
 
   const isValid = mode === 'share'
-    ? (share && cost && !isNaN(share) && !isNaN(cost))
-    : (amount && !isNaN(amount) && (!profit || !isNaN(profit)) && dwjz > 0);
+    ? (share && cost && holdingDate && !isNaN(share) && !isNaN(cost))
+    : (amount && holdingDate && !isNaN(amount) && (!profit || !isNaN(profit)) && dwjz > 0);
 
   return (
     <motion.div
@@ -1176,6 +1188,23 @@ function HoldingEditModal({ fund, holding, onClose, onSave }) {
             </>
           )}
 
+
+          <div className="form-group" style={{ marginBottom: 24 }}>
+            <label className="muted" style={{ display: 'block', marginBottom: 8, fontSize: '14px' }}>
+              持仓准确日期 <span style={{ color: 'var(--danger)' }}>*</span>
+            </label>
+            <input
+              type="date"
+              className={`input ${!holdingDate ? 'error' : ''}`}
+              value={holdingDate}
+              onChange={(e) => setHoldingDate(e.target.value)}
+              placeholder="请选择持仓准确日期"
+              style={{
+                width: '100%',
+                border: !holdingDate ? '1px solid var(--danger)' : undefined
+              }}
+            />
+          </div>
           <div className="row" style={{ gap: 12 }}>
             <button type="button" className="button secondary" onClick={onClose} style={{ flex: 1, background: 'rgba(255,255,255,0.05)', color: 'var(--text)' }}>取消</button>
             <button
@@ -2275,10 +2304,10 @@ export default function HomePage() {
   const handleSaveHolding = (code, data) => {
     setHoldings(prev => {
       const next = { ...prev };
-      if (data.share === null && data.cost === null) {
+      if (data.share === null && data.cost === null && data.holdingDate === null) {
         delete next[code];
       } else {
-        next[code] = data;
+        next[code] = { ...next[code], ...data };
       }
       storageHelper.setItem('holdings', JSON.stringify(next));
       return next;
@@ -2299,7 +2328,7 @@ export default function HomePage() {
 
   const handleClearConfirm = () => {
     if (clearConfirm?.fund) {
-      handleSaveHolding(clearConfirm.fund.code, { share: null, cost: null });
+      handleSaveHolding(clearConfirm.fund.code, { share: null, cost: null, holdingDate: null, days: null });
     }
     setClearConfirm(null);
   };
@@ -2338,7 +2367,7 @@ export default function HomePage() {
              if (newShare === 0) newCost = 0;
         }
 
-        tempHoldings[trade.fundCode] = { share: newShare, cost: newCost };
+        tempHoldings[trade.fundCode] = { ...current, share: newShare, cost: newCost, holdingDate: newShare > 0 ? current.holdingDate ?? null : null, days: newShare > 0 ? current.days ?? null : null };
         stateChanged = true;
         processedIds.add(trade.id);
       }
@@ -3405,13 +3434,27 @@ export default function HomePage() {
             : typeof value.cost === 'string'
               ? Number(value.cost)
               : NaN;
+          const parsedHoldingDate = typeof value.holdingDate === 'string'
+            ? value.holdingDate
+            : null;
+          const parsedDays = typeof value.days === 'number'
+            ? value.days
+            : typeof value.days === 'string'
+              ? Number(value.days)
+              : NaN;
           const nextShare = Number.isFinite(parsedShare) ? parsedShare : null;
           const nextCost = Number.isFinite(parsedCost) ? parsedCost : null;
-          if (nextShare === null && nextCost === null) return acc;
+          const nextHoldingDate = parsedHoldingDate && dayjs(parsedHoldingDate, 'YYYY-MM-DD', true).isValid()
+            ? parsedHoldingDate
+            : (Number.isFinite(parsedDays) && parsedDays > 0
+              ? nowInTz().subtract(Math.round(parsedDays), 'day').format('YYYY-MM-DD')
+              : null);
+          if (nextShare === null && nextCost === null && nextHoldingDate === null) return acc;
           acc[code] = {
             ...value,
             share: nextShare,
-            cost: nextCost
+            cost: nextCost,
+            holdingDate: nextHoldingDate
           };
           return acc;
         }, {})
@@ -4702,12 +4745,13 @@ export default function HomePage() {
                                   {f.noValuation ? (
                                     // 无估值数据的基金，直接显示净值涨跌幅，不显示估值相关字段
                                     <Stat
-                                      label="涨跌幅"
+                                      label="当日涨跌幅"
                                       value={f.zzl !== undefined && f.zzl !== null ? `${f.zzl > 0 ? '+' : ''}${Number(f.zzl).toFixed(2)}%` : '—'}
                                       delta={f.zzl}
                                     />
                                   ) : (
                                     <>
+                                      <Stat label="估值净值" value={f.estPricedCoverage > 0.05 ? f.estGsz.toFixed(4) : (f.gsz ?? '—')} />
                                       {(() => {
                                         const now = nowInTz();
                                         const isAfter9 = now.hour() >= 9;
@@ -4718,13 +4762,12 @@ export default function HomePage() {
 
                                         return (
                                           <Stat
-                                            label="涨跌幅"
+                                            label="当日涨跌幅"
                                             value={f.zzl !== undefined ? `${f.zzl > 0 ? '+' : ''}${Number(f.zzl).toFixed(2)}%` : ''}
                                             delta={f.zzl}
                                           />
                                         );
                                       })()}
-                                      <Stat label="估值净值" value={f.estPricedCoverage > 0.05 ? f.estGsz.toFixed(4) : (f.gsz ?? '—')} />
                                       <Stat
                                         label="估值涨跌幅"
                                         value={f.estPricedCoverage > 0.05 ? `${f.estGszzl > 0 ? '+' : ''}${f.estGszzl.toFixed(2)}%` : (typeof f.gszzl === 'number' ? `${f.gszzl > 0 ? '+' : ''}${f.gszzl.toFixed(2)}%` : f.gszzl ?? '—')}
@@ -4767,7 +4810,6 @@ export default function HomePage() {
                                           <span className="value">¥{profit.amount.toFixed(2)}</span>
                                         </div>
                                         <div className="stat" style={{ flexDirection: 'column', gap: 4, alignItems: 'center', textAlign: 'center' }}>
-                                        <div className="stat" style={{ flexDirection: 'column', gap: 4 }}>
                                           <span className="label">昨日盈亏</span>
                                           <span className={`value ${profit.profitYesterday > 0 ? 'up' : profit.profitYesterday < 0 ? 'down' : ''}`}>
                                             {typeof profit.profitYesterday === 'number'
@@ -4776,39 +4818,6 @@ export default function HomePage() {
                                           </span>
                                         </div>
                                         <div className="stat" style={{ flexDirection: 'column', gap: 4, alignItems: 'center', textAlign: 'center' }}>
-                                        <div className="stat" style={{ flexDirection: 'column', gap: 4 }}>
-                                          <span className="label">昨日盈亏</span>
-                                          <span className={`value ${profit.profitYesterday > 0 ? 'up' : profit.profitYesterday < 0 ? 'down' : ''}`}>
-                                            {typeof profit.profitYesterday === 'number'
-                                              ? `${profit.profitYesterday > 0 ? '+' : profit.profitYesterday < 0 ? '-' : ''}¥${Math.abs(profit.profitYesterday).toFixed(2)}`
-                                              : '—'}
-                                          </span>
-                                        </div>
-                                        <div className="stat" style={{ flexDirection: 'column', gap: 4 }}>
-                                          <span className="label">昨日盈亏</span>
-                                          <span className={`value ${profit.profitYesterday > 0 ? 'up' : profit.profitYesterday < 0 ? 'down' : ''}`}>
-                                            {typeof profit.profitYesterday === 'number'
-                                              ? `${profit.profitYesterday > 0 ? '+' : profit.profitYesterday < 0 ? '-' : ''}¥${Math.abs(profit.profitYesterday).toFixed(2)}`
-                                              : '—'}
-                                          </span>
-                                        </div>
-                                        <div className="stat" style={{ flexDirection: 'column', gap: 4 }}>
-                                          <span className="label">昨日盈亏</span>
-                                          <span className={`value ${profit.profitYesterday > 0 ? 'up' : profit.profitYesterday < 0 ? 'down' : ''}`}>
-                                            {typeof profit.profitYesterday === 'number'
-                                              ? `${profit.profitYesterday > 0 ? '+' : profit.profitYesterday < 0 ? '-' : ''}¥${Math.abs(profit.profitYesterday).toFixed(2)}`
-                                              : '—'}
-                                          </span>
-                                        </div>
-                                        <div className="stat" style={{ flexDirection: 'column', gap: 4 }}>
-                                          <span className="label">昨日盈亏</span>
-                                          <span className={`value ${profit.profitYesterday > 0 ? 'up' : profit.profitYesterday < 0 ? 'down' : ''}`}>
-                                            {typeof profit.profitYesterday === 'number'
-                                              ? `${profit.profitYesterday > 0 ? '+' : profit.profitYesterday < 0 ? '-' : ''}¥${Math.abs(profit.profitYesterday).toFixed(2)}`
-                                              : '—'}
-                                          </span>
-                                        </div>
-                                        <div className="stat" style={{ flexDirection: 'column', gap: 4 }}>
                                           <span className="label">当日盈亏</span>
                                           <span className={`value ${profit.profitToday > 0 ? 'up' : profit.profitToday < 0 ? 'down' : ''}`}>
                                             {profit.profitToday > 0 ? '+' : profit.profitToday < 0 ? '-' : ''}¥{Math.abs(profit.profitToday).toFixed(2)}
@@ -4898,6 +4907,8 @@ export default function HomePage() {
                                 </AnimatePresence>
                                 <FundTrendChart 
                                   code={f.code} 
+                                  holdingCost={typeof holdings[f.code]?.cost === 'number' ? holdings[f.code].cost : null}
+                                  holdingDate={typeof holdings[f.code]?.holdingDate === 'string' ? holdings[f.code].holdingDate : null}
                                   isExpanded={!collapsedTrends.has(f.code)}
                                   onToggleExpand={() => toggleTrendCollapse(f.code)}
                                 />
