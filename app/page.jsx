@@ -2213,6 +2213,7 @@ export default function HomePage() {
         yesterdayRate = latestRate;
       }
     }
+    const yesterdayRate = Number(fund.yesterdayZzl);
     if (Number.isFinite(yesterdayRate)) {
       profitYesterday = amount - (amount / (1 + yesterdayRate / 100));
     }
