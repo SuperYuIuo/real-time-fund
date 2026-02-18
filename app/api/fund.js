@@ -223,7 +223,6 @@ export const fetchFundData = async (c) => {
         jzrq: json.jzrq,
         gszzl: Number.isFinite(gszzlNum) ? gszzlNum : json.gszzl
       };
-      const yesterdayRatePromise = fetchPreviousTradingChangeRate(c, json.jzrq);
       const tencentPromise = new Promise((resolveT) => {
         const tUrl = `https://qt.gtimg.cn/q=jj${c}`;
         const tScript = document.createElement('script');
@@ -352,7 +351,7 @@ export const fetchFundData = async (c) => {
           resolveH(holdings);
         }).catch(() => resolveH([]));
       });
-      Promise.all([tencentPromise, holdingsPromise, yesterdayRatePromise]).then(([tData, holdings, yesterdayZzl]) => {
+      Promise.all([tencentPromise, holdingsPromise]).then(async ([tData, holdings]) => {
         if (tData) {
           if (tData.jzrq && (!gzData.jzrq || tData.jzrq >= gzData.jzrq)) {
             gzData.dwjz = tData.dwjz;
@@ -360,6 +359,7 @@ export const fetchFundData = async (c) => {
             gzData.zzl = tData.zzl;
           }
         }
+        const yesterdayZzl = await fetchPreviousTradingChangeRate(c, gzData.jzrq);
         resolve({ ...gzData, yesterdayZzl, holdings });
       });
     };

@@ -1753,6 +1753,7 @@ function GroupSummary({ funds, holdings, groupName, getProfit, stickyTop }) {
 
   const summary = useMemo(() => {
     let totalAsset = 0;
+    let totalProfitYesterday = 0;
     let totalProfitToday = 0;
     let totalHoldingReturn = 0;
     let totalCost = 0;
@@ -1765,7 +1766,8 @@ function GroupSummary({ funds, holdings, groupName, getProfit, stickyTop }) {
       if (profit) {
         hasHolding = true;
         totalAsset += profit.amount;
-        totalProfitToday += profit.profitToday;
+        totalProfitToday += (typeof profit.profitToday === 'number' ? profit.profitToday : 0);
+        totalProfitYesterday += (typeof profit.profitYesterday === 'number' ? profit.profitYesterday : 0);
         if (profit.profitTotal !== null) {
           totalHoldingReturn += profit.profitTotal;
           if (holding && typeof holding.cost === 'number' && typeof holding.share === 'number') {
@@ -1777,7 +1779,7 @@ function GroupSummary({ funds, holdings, groupName, getProfit, stickyTop }) {
 
     const returnRate = totalCost > 0 ? (totalHoldingReturn / totalCost) * 100 : 0;
 
-    return { totalAsset, totalProfitToday, totalHoldingReturn, hasHolding, returnRate };
+    return { totalAsset, totalProfitYesterday, totalProfitToday, totalHoldingReturn, hasHolding, returnRate };
   }, [funds, holdings, getProfit]);
 
   useLayoutEffect(() => {
@@ -1794,7 +1796,7 @@ function GroupSummary({ funds, holdings, groupName, getProfit, stickyTop }) {
       // 这里的逻辑可以优化：如果当前远小于阈值，可以尝试增大，但为了稳定性，主要处理缩小的场景
       // 或者：如果高度非常小（例如远小于80），可以尝试+1，但要小心死循环
     }
-  }, [winW, summary.totalAsset, summary.totalProfitToday, summary.totalHoldingReturn, summary.returnRate, showPercent, assetSize, metricSize]); // 添加 assetSize, metricSize 到依赖，确保逐步缩小生效
+  }, [winW, summary.totalAsset, summary.totalProfitYesterday, summary.totalProfitToday, summary.totalHoldingReturn, summary.returnRate, showPercent, assetSize, metricSize]); // 添加 assetSize, metricSize 到依赖，确保逐步缩小生效
 
   if (!summary.hasHolding) return null;
 
@@ -1841,6 +1843,22 @@ function GroupSummary({ funds, holdings, groupName, getProfit, stickyTop }) {
           </div>
         </div>
         <div style={{ display: 'flex', gap: 24 }}>
+          <div style={{ textAlign: 'right' }}>
+            <div className="muted" style={{ fontSize: '12px', marginBottom: 4 }}>昨日收益</div>
+            <div
+              className={summary.totalProfitYesterday > 0 ? 'up' : summary.totalProfitYesterday < 0 ? 'down' : ''}
+              style={{ fontSize: '18px', fontWeight: 700, fontFamily: 'var(--font-mono)' }}
+            >
+              {isMasked ? (
+                <span style={{ fontSize: metricSize }}>******</span>
+              ) : (
+                <>
+                  <span style={{ marginRight: 1 }}>{summary.totalProfitYesterday > 0 ? '+' : summary.totalProfitYesterday < 0 ? '-' : ''}</span>
+                  <CountUp value={Math.abs(summary.totalProfitYesterday)} style={{ fontSize: metricSize }} />
+                </>
+              )}
+            </div>
+          </div>
           <div style={{ textAlign: 'right' }}>
             <div className="muted" style={{ fontSize: '12px', marginBottom: 4 }}>当日收益</div>
             <div
@@ -4557,7 +4575,7 @@ export default function HomePage() {
                                       >
                                         {hasYesterday
                                           ? `${yesterdayValue > 0 ? '+' : yesterdayValue < 0 ? '-' : ''}¥${Math.abs(yesterdayValue).toFixed(2)}`
-                                          : ''}
+                                          : '—'}
                                       </span>
                                     </div>
                                   );
@@ -4576,7 +4594,7 @@ export default function HomePage() {
                                       >
                                         {hasProfit
                                           ? `${profitValue > 0 ? '+' : profitValue < 0 ? '-' : ''}¥${Math.abs(profitValue).toFixed(2)}`
-                                          : ''}
+                                          : '—'}
                                       </span>
                                     </div>
                                   );
@@ -4751,7 +4769,9 @@ export default function HomePage() {
                                         <div className="stat" style={{ flexDirection: 'column', gap: 4 }}>
                                           <span className="label">昨日盈亏</span>
                                           <span className={`value ${profit.profitYesterday > 0 ? 'up' : profit.profitYesterday < 0 ? 'down' : ''}`}>
-                                            {profit.profitYesterday > 0 ? '+' : profit.profitYesterday < 0 ? '-' : ''}¥{Math.abs(profit.profitYesterday || 0).toFixed(2)}
+                                            {typeof profit.profitYesterday === 'number'
+                                              ? `${profit.profitYesterday > 0 ? '+' : profit.profitYesterday < 0 ? '-' : ''}¥${Math.abs(profit.profitYesterday).toFixed(2)}`
+                                              : '—'}
                                           </span>
                                         </div>
                                         <div className="stat" style={{ flexDirection: 'column', gap: 4 }}>
