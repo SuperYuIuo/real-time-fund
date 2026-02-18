@@ -92,6 +92,7 @@ export default function FundTrendChart({ code, isExpanded, onToggleExpand }) {
     // Calculate percentage change based on the first data point
     const firstValue = data.length > 0 ? data[0].value : 1;
     const percentageData = data.map(d => ((d.value - firstValue) / firstValue) * 100);
+    const unitValues = data.map(d => d.value);
 
     return {
       labels: data.map(d => d.date),
@@ -99,6 +100,7 @@ export default function FundTrendChart({ code, isExpanded, onToggleExpand }) {
         {
           label: '涨跌幅',
           data: percentageData,
+          rawValues: unitValues,
           borderColor: lineColor,
           backgroundColor: (context) => {
             const ctx = context.chart.ctx;
@@ -112,6 +114,20 @@ export default function FundTrendChart({ code, isExpanded, onToggleExpand }) {
           pointHoverRadius: 4,
           fill: true,
           tension: 0.2
+        },
+        {
+          label: '单位净值点位',
+          data: percentageData,
+          rawValues: unitValues,
+          borderWidth: 0,
+          pointRadius: 2.8,
+          pointHoverRadius: 5,
+          pointBackgroundColor: '#22d3ee',
+          pointBorderColor: '#0f172a',
+          pointBorderWidth: 1.5,
+          showLine: false,
+          fill: false,
+          order: 0
         }
       ]
     };
@@ -252,6 +268,19 @@ export default function FundTrendChart({ code, isExpanded, onToggleExpand }) {
                ctx.fillStyle = '#0f172a'; // --background
                ctx.textAlign = 'center';
                ctx.fillText(valueStr, rightX - valWidth / 2, y);
+
+               // Unit NAV label for the same point
+               const rawValue = datasets[datasetIndex].rawValues?.[index];
+               if (typeof rawValue === 'number') {
+                 const navStr = `净值 ${rawValue.toFixed(4)}`;
+                 const navWidth = ctx.measureText(navStr).width + 10;
+                 const navX = Math.max(leftX + navWidth / 2, Math.min(rightX - navWidth / 2, x));
+                 const navY = Math.max(topY + 10, y - 18);
+                 ctx.fillStyle = '#22d3ee';
+                 ctx.fillRect(navX - navWidth / 2, navY - 8, navWidth, 16);
+                 ctx.fillStyle = '#0f172a';
+                 ctx.fillText(navStr, navX, navY);
+               }
            }
         }
 
@@ -301,6 +330,12 @@ export default function FundTrendChart({ code, isExpanded, onToggleExpand }) {
             style={{ overflow: 'hidden' }}
           >
             <div style={{ position: 'relative', height: 180, width: '100%' }}>
+              {data.length > 0 && (
+                <div style={{ position: 'absolute', left: 0, top: -2, zIndex: 2, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#22d3ee', display: 'inline-block' }} />
+                  <span className="muted" style={{ fontSize: '10px' }}>单位净值点位</span>
+                </div>
+              )}
               {loading && (
                 <div style={{ 
                   position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
