@@ -2152,6 +2152,7 @@ export default function HomePage() {
 
     let currentNav;
     let profitToday;
+    let profitYesterday = null;
 
     if (!useValuation) {
       // 使用确权净值 (dwjz)
@@ -2187,6 +2188,11 @@ export default function HomePage() {
     // 持仓金额
     const amount = holding.share * currentNav;
 
+    const yesterdayRate = Number(fund.yesterdayZzl);
+    if (Number.isFinite(yesterdayRate)) {
+      profitYesterday = amount - (amount / (1 + yesterdayRate / 100));
+    }
+
     // 总收益 = (当前净值 - 成本价) * 份额
     const profitTotal = typeof holding.cost === 'number'
       ? (currentNav - holding.cost) * holding.share
@@ -2195,6 +2201,7 @@ export default function HomePage() {
     return {
       amount,
       profitToday,
+      profitYesterday,
       profitTotal
     };
   };
@@ -4332,6 +4339,7 @@ export default function HomePage() {
                         <div className="table-header-cell text-right">涨跌幅</div>
                         <div className="table-header-cell text-right">估值时间</div>
                         <div className="table-header-cell text-right">持仓金额</div>
+                        <div className="table-header-cell text-right">昨日盈亏</div>
                         <div className="table-header-cell text-right">当日盈亏</div>
                         <div className="table-header-cell text-right">持有收益</div>
                         <div className="table-header-cell text-center">操作</div>
@@ -4538,6 +4546,25 @@ export default function HomePage() {
                                 {(() => {
                                   const holding = holdings[f.code];
                                   const profit = getHoldingProfit(f, holding);
+                                  const yesterdayValue = profit ? profit.profitYesterday : null;
+                                  const hasYesterday = yesterdayValue !== null;
+
+                                  return (
+                                    <div className="table-cell text-right profit-cell">
+                                      <span
+                                        className={hasYesterday ? (yesterdayValue > 0 ? 'up' : yesterdayValue < 0 ? 'down' : '') : 'muted'}
+                                        style={{ fontWeight: 700 }}
+                                      >
+                                        {hasYesterday
+                                          ? `${yesterdayValue > 0 ? '+' : yesterdayValue < 0 ? '-' : ''}¥${Math.abs(yesterdayValue).toFixed(2)}`
+                                          : ''}
+                                      </span>
+                                    </div>
+                                  );
+                                })()}
+                                {(() => {
+                                  const holding = holdings[f.code];
+                                  const profit = getHoldingProfit(f, holding);
                                   const profitValue = profit ? profit.profitToday : null;
                                   const hasProfit = profitValue !== null;
 
@@ -4720,6 +4747,12 @@ export default function HomePage() {
                                             持仓金额 <SettingsIcon width="12" height="12" style={{ opacity: 0.7 }} />
                                           </span>
                                           <span className="value">¥{profit.amount.toFixed(2)}</span>
+                                        </div>
+                                        <div className="stat" style={{ flexDirection: 'column', gap: 4 }}>
+                                          <span className="label">昨日盈亏</span>
+                                          <span className={`value ${profit.profitYesterday > 0 ? 'up' : profit.profitYesterday < 0 ? 'down' : ''}`}>
+                                            {profit.profitYesterday > 0 ? '+' : profit.profitYesterday < 0 ? '-' : ''}¥{Math.abs(profit.profitYesterday || 0).toFixed(2)}
+                                          </span>
                                         </div>
                                         <div className="stat" style={{ flexDirection: 'column', gap: 4 }}>
                                           <span className="label">当日盈亏</span>
