@@ -962,6 +962,7 @@ function HoldingEditModal({ fund, holding, onClose, onSave }) {
   const [cost, setCost] = useState('');
   const [amount, setAmount] = useState('');
   const [profit, setProfit] = useState('');
+  const [holdingDate, setHoldingDate] = useState('');
 
   // 初始化数据
   useEffect(() => {
@@ -970,6 +971,10 @@ function HoldingEditModal({ fund, holding, onClose, onSave }) {
       const c = holding.cost || 0;
       setShare(String(s));
       setCost(String(c));
+      const derivedDate = holding.holdingDate
+        ? formatDate(holding.holdingDate)
+        : (holding.days ? nowInTz().subtract(Math.round(Number(holding.days) || 0), 'day').format('YYYY-MM-DD') : '');
+      setHoldingDate(derivedDate);
 
       if (dwjz > 0) {
         const a = s * dwjz;
@@ -977,6 +982,12 @@ function HoldingEditModal({ fund, holding, onClose, onSave }) {
         setAmount(a.toFixed(2));
         setProfit(p.toFixed(2));
       }
+    } else {
+      setShare('');
+      setCost('');
+      setAmount('');
+      setProfit('');
+      setHoldingDate(nowInTz().format('YYYY-MM-DD'));
     }
   }, [holding, fund]);
 
@@ -1018,11 +1029,11 @@ function HoldingEditModal({ fund, holding, onClose, onSave }) {
     let finalCost = 0;
 
     if (mode === 'share') {
-      if (!share || !cost) return;
+      if (!share || !cost || !holdingDate) return;
       finalShare = Number(Number(share).toFixed(2));
       finalCost = Number(cost);
     } else {
-      if (!amount || !dwjz) return;
+      if (!amount || !dwjz || !holdingDate) return;
       const a = Number(amount);
       const p = Number(profit || 0);
       const rawShare = a / dwjz;
@@ -1033,14 +1044,51 @@ function HoldingEditModal({ fund, holding, onClose, onSave }) {
 
     onSave({
       share: finalShare,
-      cost: finalCost
+      cost: finalCost,
+      holdingDate
     });
     onClose();
   };
 
   const isValid = mode === 'share'
-    ? (share && cost && !isNaN(share) && !isNaN(cost))
-    : (amount && !isNaN(amount) && (!profit || !isNaN(profit)) && dwjz > 0);
+    ? (share && cost && holdingDate && !isNaN(share) && !isNaN(cost))
+    : (amount && holdingDate && !isNaN(amount) && (!profit || !isNaN(profit)) && dwjz > 0);
+
+  const today = nowInTz();
+  const parsedHoldingDate = holdingDate && dayjs(holdingDate, 'YYYY-MM-DD', true).isValid()
+    ? dayjs(holdingDate)
+    : today;
+  const wheelYear = parsedHoldingDate.year();
+  const wheelMonth = parsedHoldingDate.month() + 1;
+  const wheelDay = parsedHoldingDate.date();
+  const yearOptions = Array.from({ length: 31 }, (_, idx) => today.year() - 30 + idx);
+  const maxDate = today.startOf('day');
+
+  const applyHoldingDate = (nextYear, nextMonth, nextDay) => {
+    const minYear = yearOptions[0];
+    const maxYear = yearOptions[yearOptions.length - 1];
+    const y = Math.min(maxYear, Math.max(minYear, Number(nextYear)));
+    const m = Math.min(12, Math.max(1, Number(nextMonth)));
+    const d = Number(nextDay);
+    const daysInMonth = dayjs(`${y}-${String(m).padStart(2, '0')}-01`).daysInMonth();
+    const safeDay = Math.min(Math.max(1, d), daysInMonth);
+    let next = dayjs(`${y}-${String(m).padStart(2, '0')}-${String(safeDay).padStart(2, '0')}`, 'YYYY-MM-DD', true);
+    if (!next.isValid()) return;
+    if (next.isAfter(maxDate)) next = maxDate;
+    setHoldingDate(next.format('YYYY-MM-DD'));
+  };
+
+  const handleDateWheel = (part, delta) => {
+    if (part === 'year') {
+      applyHoldingDate(wheelYear + delta, wheelMonth, wheelDay);
+      return;
+    }
+    if (part === 'month') {
+      applyHoldingDate(wheelYear, wheelMonth + delta, wheelDay);
+      return;
+    }
+    applyHoldingDate(wheelYear, wheelMonth, wheelDay + delta);
+  };
 
   return (
     <motion.div
@@ -1176,6 +1224,63 @@ function HoldingEditModal({ fund, holding, onClose, onSave }) {
             </>
           )}
 
+
+          <div className="form-group" style={{ marginBottom: 24 }}>
+            <label className="muted" style={{ display: 'block', marginBottom: 8, fontSize: '14px' }}>
+              持仓准确日期 <span style={{ color: 'var(--danger)' }}>*</span>
+            </label>
+            <div
+              className={`input ${!holdingDate ? 'error' : ''}`}
+              style={{
+                width: '100%',
+                border: !holdingDate ? '1px solid var(--danger)' : undefined,
+                height: 'auto',
+                padding: '10px 12px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8
+              }}
+            >
+              <select
+                value={wheelYear}
+                onChange={(e) => applyHoldingDate(Number(e.target.value), wheelMonth, wheelDay)}
+                onWheel={(e) => {
+                  e.preventDefault();
+                  handleDateWheel('year', e.deltaY > 0 ? 1 : -1);
+                }}
+                className="input"
+                style={{ flex: 1, height: 36, padding: '0 8px' }}
+              >
+                {yearOptions.map(y => <option key={y} value={y}>{y}年</option>)}
+              </select>
+              <select
+                value={wheelMonth}
+                onChange={(e) => applyHoldingDate(wheelYear, Number(e.target.value), wheelDay)}
+                onWheel={(e) => {
+                  e.preventDefault();
+                  handleDateWheel('month', e.deltaY > 0 ? 1 : -1);
+                }}
+                className="input"
+                style={{ width: 96, height: 36, padding: '0 8px' }}
+              >
+                {Array.from({ length: 12 }, (_, idx) => idx + 1).map(m => <option key={m} value={m}>{m}月</option>)}
+              </select>
+              <select
+                value={wheelDay}
+                onChange={(e) => applyHoldingDate(wheelYear, wheelMonth, Number(e.target.value))}
+                onWheel={(e) => {
+                  e.preventDefault();
+                  handleDateWheel('day', e.deltaY > 0 ? 1 : -1);
+                }}
+                className="input"
+                style={{ width: 88, height: 36, padding: '0 8px' }}
+              >
+                {Array.from({ length: dayjs(`${wheelYear}-${String(wheelMonth).padStart(2, '0')}-01`).daysInMonth() }, (_, idx) => idx + 1)
+                  .map(d => <option key={d} value={d}>{d}日</option>)}
+              </select>
+            </div>
+            <div className="muted" style={{ marginTop: 6, fontSize: '11px' }}>可滚动鼠标滚轮快速调整年月日</div>
+          </div>
           <div className="row" style={{ gap: 12 }}>
             <button type="button" className="button secondary" onClick={onClose} style={{ flex: 1, background: 'rgba(255,255,255,0.05)', color: 'var(--text)' }}>取消</button>
             <button
@@ -2275,10 +2380,10 @@ export default function HomePage() {
   const handleSaveHolding = (code, data) => {
     setHoldings(prev => {
       const next = { ...prev };
-      if (data.share === null && data.cost === null) {
+      if (data.share === null && data.cost === null && data.holdingDate === null) {
         delete next[code];
       } else {
-        next[code] = data;
+        next[code] = { ...next[code], ...data };
       }
       storageHelper.setItem('holdings', JSON.stringify(next));
       return next;
@@ -2299,7 +2404,7 @@ export default function HomePage() {
 
   const handleClearConfirm = () => {
     if (clearConfirm?.fund) {
-      handleSaveHolding(clearConfirm.fund.code, { share: null, cost: null });
+      handleSaveHolding(clearConfirm.fund.code, { share: null, cost: null, holdingDate: null, days: null });
     }
     setClearConfirm(null);
   };
@@ -2338,7 +2443,7 @@ export default function HomePage() {
              if (newShare === 0) newCost = 0;
         }
 
-        tempHoldings[trade.fundCode] = { share: newShare, cost: newCost };
+        tempHoldings[trade.fundCode] = { ...current, share: newShare, cost: newCost, holdingDate: newShare > 0 ? current.holdingDate ?? null : null, days: newShare > 0 ? current.days ?? null : null };
         stateChanged = true;
         processedIds.add(trade.id);
       }
@@ -3405,13 +3510,27 @@ export default function HomePage() {
             : typeof value.cost === 'string'
               ? Number(value.cost)
               : NaN;
+          const parsedHoldingDate = typeof value.holdingDate === 'string'
+            ? value.holdingDate
+            : null;
+          const parsedDays = typeof value.days === 'number'
+            ? value.days
+            : typeof value.days === 'string'
+              ? Number(value.days)
+              : NaN;
           const nextShare = Number.isFinite(parsedShare) ? parsedShare : null;
           const nextCost = Number.isFinite(parsedCost) ? parsedCost : null;
-          if (nextShare === null && nextCost === null) return acc;
+          const nextHoldingDate = parsedHoldingDate && dayjs(parsedHoldingDate, 'YYYY-MM-DD', true).isValid()
+            ? parsedHoldingDate
+            : (Number.isFinite(parsedDays) && parsedDays > 0
+              ? nowInTz().subtract(Math.round(parsedDays), 'day').format('YYYY-MM-DD')
+              : null);
+          if (nextShare === null && nextCost === null && nextHoldingDate === null) return acc;
           acc[code] = {
             ...value,
             share: nextShare,
-            cost: nextCost
+            cost: nextCost,
+            holdingDate: nextHoldingDate
           };
           return acc;
         }, {})
@@ -4702,12 +4821,13 @@ export default function HomePage() {
                                   {f.noValuation ? (
                                     // 无估值数据的基金，直接显示净值涨跌幅，不显示估值相关字段
                                     <Stat
-                                      label="涨跌幅"
+                                      label="当日涨跌幅"
                                       value={f.zzl !== undefined && f.zzl !== null ? `${f.zzl > 0 ? '+' : ''}${Number(f.zzl).toFixed(2)}%` : '—'}
                                       delta={f.zzl}
                                     />
                                   ) : (
                                     <>
+                                      <Stat label="估值净值" value={f.estPricedCoverage > 0.05 ? f.estGsz.toFixed(4) : (f.gsz ?? '—')} />
                                       {(() => {
                                         const now = nowInTz();
                                         const isAfter9 = now.hour() >= 9;
@@ -4718,13 +4838,12 @@ export default function HomePage() {
 
                                         return (
                                           <Stat
-                                            label="涨跌幅"
+                                            label="当日涨跌幅"
                                             value={f.zzl !== undefined ? `${f.zzl > 0 ? '+' : ''}${Number(f.zzl).toFixed(2)}%` : ''}
                                             delta={f.zzl}
                                           />
                                         );
                                       })()}
-                                      <Stat label="估值净值" value={f.estPricedCoverage > 0.05 ? f.estGsz.toFixed(4) : (f.gsz ?? '—')} />
                                       <Stat
                                         label="估值涨跌幅"
                                         value={f.estPricedCoverage > 0.05 ? `${f.estGszzl > 0 ? '+' : ''}${f.estGszzl.toFixed(2)}%` : (typeof f.gszzl === 'number' ? `${f.gszzl > 0 ? '+' : ''}${f.gszzl.toFixed(2)}%` : f.gszzl ?? '—')}
@@ -4767,7 +4886,6 @@ export default function HomePage() {
                                           <span className="value">¥{profit.amount.toFixed(2)}</span>
                                         </div>
                                         <div className="stat" style={{ flexDirection: 'column', gap: 4, alignItems: 'center', textAlign: 'center' }}>
-                                        <div className="stat" style={{ flexDirection: 'column', gap: 4 }}>
                                           <span className="label">昨日盈亏</span>
                                           <span className={`value ${profit.profitYesterday > 0 ? 'up' : profit.profitYesterday < 0 ? 'down' : ''}`}>
                                             {typeof profit.profitYesterday === 'number'
@@ -4776,39 +4894,6 @@ export default function HomePage() {
                                           </span>
                                         </div>
                                         <div className="stat" style={{ flexDirection: 'column', gap: 4, alignItems: 'center', textAlign: 'center' }}>
-                                        <div className="stat" style={{ flexDirection: 'column', gap: 4 }}>
-                                          <span className="label">昨日盈亏</span>
-                                          <span className={`value ${profit.profitYesterday > 0 ? 'up' : profit.profitYesterday < 0 ? 'down' : ''}`}>
-                                            {typeof profit.profitYesterday === 'number'
-                                              ? `${profit.profitYesterday > 0 ? '+' : profit.profitYesterday < 0 ? '-' : ''}¥${Math.abs(profit.profitYesterday).toFixed(2)}`
-                                              : '—'}
-                                          </span>
-                                        </div>
-                                        <div className="stat" style={{ flexDirection: 'column', gap: 4 }}>
-                                          <span className="label">昨日盈亏</span>
-                                          <span className={`value ${profit.profitYesterday > 0 ? 'up' : profit.profitYesterday < 0 ? 'down' : ''}`}>
-                                            {typeof profit.profitYesterday === 'number'
-                                              ? `${profit.profitYesterday > 0 ? '+' : profit.profitYesterday < 0 ? '-' : ''}¥${Math.abs(profit.profitYesterday).toFixed(2)}`
-                                              : '—'}
-                                          </span>
-                                        </div>
-                                        <div className="stat" style={{ flexDirection: 'column', gap: 4 }}>
-                                          <span className="label">昨日盈亏</span>
-                                          <span className={`value ${profit.profitYesterday > 0 ? 'up' : profit.profitYesterday < 0 ? 'down' : ''}`}>
-                                            {typeof profit.profitYesterday === 'number'
-                                              ? `${profit.profitYesterday > 0 ? '+' : profit.profitYesterday < 0 ? '-' : ''}¥${Math.abs(profit.profitYesterday).toFixed(2)}`
-                                              : '—'}
-                                          </span>
-                                        </div>
-                                        <div className="stat" style={{ flexDirection: 'column', gap: 4 }}>
-                                          <span className="label">昨日盈亏</span>
-                                          <span className={`value ${profit.profitYesterday > 0 ? 'up' : profit.profitYesterday < 0 ? 'down' : ''}`}>
-                                            {typeof profit.profitYesterday === 'number'
-                                              ? `${profit.profitYesterday > 0 ? '+' : profit.profitYesterday < 0 ? '-' : ''}¥${Math.abs(profit.profitYesterday).toFixed(2)}`
-                                              : '—'}
-                                          </span>
-                                        </div>
-                                        <div className="stat" style={{ flexDirection: 'column', gap: 4 }}>
                                           <span className="label">当日盈亏</span>
                                           <span className={`value ${profit.profitToday > 0 ? 'up' : profit.profitToday < 0 ? 'down' : ''}`}>
                                             {profit.profitToday > 0 ? '+' : profit.profitToday < 0 ? '-' : ''}¥{Math.abs(profit.profitToday).toFixed(2)}
@@ -4898,6 +4983,8 @@ export default function HomePage() {
                                 </AnimatePresence>
                                 <FundTrendChart 
                                   code={f.code} 
+                                  holdingCost={typeof holdings[f.code]?.cost === 'number' ? holdings[f.code].cost : null}
+                                  holdingDate={typeof holdings[f.code]?.holdingDate === 'string' ? holdings[f.code].holdingDate : null}
                                   isExpanded={!collapsedTrends.has(f.code)}
                                   onToggleExpand={() => toggleTrendCollapse(f.code)}
                                 />
