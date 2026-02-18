@@ -75,6 +75,7 @@ jobs:
 
       - name: Docker Compose up
         run: |
+          docker compose up -d --build
           docker compose --env-file .env up -d --build
           echo "Waiting for app service to become ready..."
           for i in {1..18}; do
