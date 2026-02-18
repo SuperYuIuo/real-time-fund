@@ -4864,6 +4864,7 @@ export default function HomePage() {
                                 </AnimatePresence>
                                 <FundTrendChart 
                                   code={f.code} 
+                                  holdingCost={typeof holdings[f.code]?.cost === 'number' ? holdings[f.code].cost : null}
                                   isExpanded={!collapsedTrends.has(f.code)}
                                   onToggleExpand={() => toggleTrendCollapse(f.code)}
                                 />
