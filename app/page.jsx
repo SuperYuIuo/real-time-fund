@@ -1042,6 +1042,8 @@ function HoldingEditModal({ fund, holding, onClose, onSave }) {
       finalCost = finalShare > 0 ? principal / finalShare : 0;
     }
 
+    const finalDays = Math.max(1, parseInt(holdingDays, 10) || 1);
+
     onSave({
       share: finalShare,
       cost: finalCost,
