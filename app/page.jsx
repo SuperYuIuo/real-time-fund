@@ -4702,7 +4702,7 @@ export default function HomePage() {
                                   {f.noValuation ? (
                                     // 无估值数据的基金，直接显示净值涨跌幅，不显示估值相关字段
                                     <Stat
-                                      label="涨跌幅"
+                                      label="当日涨跌幅"
                                       value={f.zzl !== undefined && f.zzl !== null ? `${f.zzl > 0 ? '+' : ''}${Number(f.zzl).toFixed(2)}%` : '—'}
                                       delta={f.zzl}
                                     />
@@ -4733,7 +4733,7 @@ export default function HomePage() {
 
                                     if (!profit) {
                                       return (
-                                        <div className="stat" style={{ flexDirection: 'column', gap: 4 }}>
+                                        <div className="stat" style={{ flexDirection: 'column', gap: 4, alignItems: 'center', textAlign: 'center' }}>
                                           <span className="label">持仓金额</span>
                                           <div
                                             className="value muted"
@@ -4750,7 +4750,7 @@ export default function HomePage() {
                                       <div style={{ display: 'contents' }}>
                                         <div
                                           className="stat"
-                                          style={{ cursor: 'pointer', flexDirection: 'column', gap: 4 }}
+                                          style={{ cursor: 'pointer', flexDirection: 'column', gap: 4, alignItems: 'center', textAlign: 'center' }}
                                           onClick={() => setActionModal({ open: true, fund: f })}
                                         >
                                           <span className="label" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -4779,7 +4779,7 @@ export default function HomePage() {
                                               e.stopPropagation();
                                               setPercentModes(prev => ({ ...prev, [f.code]: !prev[f.code] }));
                                             }}
-                                            style={{ cursor: 'pointer', flexDirection: 'column', gap: 4 }}
+                                            style={{ cursor: 'pointer', flexDirection: 'column', gap: 4, alignItems: 'center', textAlign: 'center' }}
                                             title="点击切换金额/百分比"
                                           >
                                             <span className="label">持有收益{percentModes[f.code] ? '(%)' : ''}</span>
@@ -4856,6 +4856,7 @@ export default function HomePage() {
                                 </AnimatePresence>
                                 <FundTrendChart 
                                   code={f.code} 
+                                  holdingCost={typeof holdings[f.code]?.cost === 'number' ? holdings[f.code].cost : null}
                                   isExpanded={!collapsedTrends.has(f.code)}
                                   onToggleExpand={() => toggleTrendCollapse(f.code)}
                                 />
