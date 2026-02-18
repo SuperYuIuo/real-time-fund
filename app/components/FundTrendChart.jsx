@@ -29,7 +29,7 @@ ChartJS.register(
   Filler
 );
 
-export default function FundTrendChart({ code, isExpanded, onToggleExpand, holdingCost, holdingDays }) {
+export default function FundTrendChart({ code, isExpanded, onToggleExpand, holdingCost, holdingDate }) {
   const [range, setRange] = useState('1m');
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -91,15 +91,14 @@ export default function FundTrendChart({ code, isExpanded, onToggleExpand, holdi
   const costMarker = useMemo(() => {
     if (
       typeof holdingCost !== 'number' || Number.isNaN(holdingCost) ||
-      typeof holdingDays !== 'number' || Number.isNaN(holdingDays) || holdingDays <= 0 ||
+      !holdingDate ||
       data.length < 2
     ) {
       return null;
     }
 
-    const targetDate = new Date();
-    targetDate.setHours(0, 0, 0, 0);
-    targetDate.setDate(targetDate.getDate() - Math.round(holdingDays));
+    const targetDate = new Date(`${holdingDate}T00:00:00`);
+    if (Number.isNaN(targetDate.getTime())) return null;
 
     const datedPoints = data
       .map((d, index) => {
@@ -128,9 +127,9 @@ export default function FundTrendChart({ code, isExpanded, onToggleExpand, holdi
     return {
       index: nearest.index,
       date: nearest.date,
-      days: Math.round(holdingDays),
+      holdingDate,
     };
-  }, [data, holdingCost, holdingDays]);
+  }, [data, holdingCost, holdingDate]);
 
   const chartData = useMemo(() => {
     // Calculate percentage change based on the first data point
@@ -335,7 +334,7 @@ export default function FundTrendChart({ code, isExpanded, onToggleExpand, holdi
                }
 
                if (costMarker && index === costMarker.index) {
-                 const costStr = `成本 ${holdingCost.toFixed(4)} (${costMarker.days}天)`;
+                 const costStr = `成本 ${holdingCost.toFixed(4)} (建仓日 ${costMarker.holdingDate})`;
                  const costWidth = ctx.measureText(costStr).width + 10;
                  const costX = Math.max(leftX + costWidth / 2, Math.min(rightX - costWidth / 2, x));
                  const costY = Math.min(bottomY - 10, y + 18);

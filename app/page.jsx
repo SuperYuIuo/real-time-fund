@@ -962,7 +962,7 @@ function HoldingEditModal({ fund, holding, onClose, onSave }) {
   const [cost, setCost] = useState('');
   const [amount, setAmount] = useState('');
   const [profit, setProfit] = useState('');
-  const [holdingDays, setHoldingDays] = useState('');
+  const [holdingDate, setHoldingDate] = useState('');
 
   // 初始化数据
   useEffect(() => {
@@ -971,7 +971,10 @@ function HoldingEditModal({ fund, holding, onClose, onSave }) {
       const c = holding.cost || 0;
       setShare(String(s));
       setCost(String(c));
-      setHoldingDays(holding.days ? String(holding.days) : '');
+      const derivedDate = holding.holdingDate
+        ? formatDate(holding.holdingDate)
+        : (holding.days ? nowInTz().subtract(Math.round(Number(holding.days) || 0), 'day').format('YYYY-MM-DD') : '');
+      setHoldingDate(derivedDate);
 
       if (dwjz > 0) {
         const a = s * dwjz;
@@ -984,7 +987,7 @@ function HoldingEditModal({ fund, holding, onClose, onSave }) {
       setCost('');
       setAmount('');
       setProfit('');
-      setHoldingDays('');
+      setHoldingDate('');
     }
   }, [holding, fund]);
 
@@ -1026,11 +1029,11 @@ function HoldingEditModal({ fund, holding, onClose, onSave }) {
     let finalCost = 0;
 
     if (mode === 'share') {
-      if (!share || !cost || !holdingDays) return;
+      if (!share || !cost || !holdingDate) return;
       finalShare = Number(Number(share).toFixed(2));
       finalCost = Number(cost);
     } else {
-      if (!amount || !dwjz || !holdingDays) return;
+      if (!amount || !dwjz || !holdingDate) return;
       const a = Number(amount);
       const p = Number(profit || 0);
       const rawShare = a / dwjz;
@@ -1044,14 +1047,14 @@ function HoldingEditModal({ fund, holding, onClose, onSave }) {
     onSave({
       share: finalShare,
       cost: finalCost,
-      days: finalDays
+      holdingDate
     });
     onClose();
   };
 
   const isValid = mode === 'share'
-    ? (share && cost && holdingDays && !isNaN(share) && !isNaN(cost) && Number(holdingDays) > 0)
-    : (amount && holdingDays && !isNaN(amount) && (!profit || !isNaN(profit)) && Number(holdingDays) > 0 && dwjz > 0);
+    ? (share && cost && holdingDate && !isNaN(share) && !isNaN(cost))
+    : (amount && holdingDate && !isNaN(amount) && (!profit || !isNaN(profit)) && dwjz > 0);
 
   return (
     <motion.div
@@ -1190,19 +1193,17 @@ function HoldingEditModal({ fund, holding, onClose, onSave }) {
 
           <div className="form-group" style={{ marginBottom: 24 }}>
             <label className="muted" style={{ display: 'block', marginBottom: 8, fontSize: '14px' }}>
-              持仓天数 <span style={{ color: 'var(--danger)' }}>*</span>
+              持仓准确日期 <span style={{ color: 'var(--danger)' }}>*</span>
             </label>
             <input
-              type="number"
-              min="1"
-              step="1"
-              className={`input ${!holdingDays ? 'error' : ''}`}
-              value={holdingDays}
-              onChange={(e) => setHoldingDays(e.target.value)}
-              placeholder="请输入持仓天数"
+              type="date"
+              className={`input ${!holdingDate ? 'error' : ''}`}
+              value={holdingDate}
+              onChange={(e) => setHoldingDate(e.target.value)}
+              placeholder="请选择持仓准确日期"
               style={{
                 width: '100%',
-                border: !holdingDays ? '1px solid var(--danger)' : undefined
+                border: !holdingDate ? '1px solid var(--danger)' : undefined
               }}
             />
           </div>
@@ -2305,7 +2306,7 @@ export default function HomePage() {
   const handleSaveHolding = (code, data) => {
     setHoldings(prev => {
       const next = { ...prev };
-      if (data.share === null && data.cost === null && data.days === null) {
+      if (data.share === null && data.cost === null && data.holdingDate === null) {
         delete next[code];
       } else {
         next[code] = { ...next[code], ...data };
@@ -2329,7 +2330,7 @@ export default function HomePage() {
 
   const handleClearConfirm = () => {
     if (clearConfirm?.fund) {
-      handleSaveHolding(clearConfirm.fund.code, { share: null, cost: null, days: null });
+      handleSaveHolding(clearConfirm.fund.code, { share: null, cost: null, holdingDate: null, days: null });
     }
     setClearConfirm(null);
   };
@@ -2368,7 +2369,7 @@ export default function HomePage() {
              if (newShare === 0) newCost = 0;
         }
 
-        tempHoldings[trade.fundCode] = { ...current, share: newShare, cost: newCost, days: newShare > 0 ? current.days ?? null : null };
+        tempHoldings[trade.fundCode] = { ...current, share: newShare, cost: newCost, holdingDate: newShare > 0 ? current.holdingDate ?? null : null, days: newShare > 0 ? current.days ?? null : null };
         stateChanged = true;
         processedIds.add(trade.id);
       }
@@ -3435,6 +3436,9 @@ export default function HomePage() {
             : typeof value.cost === 'string'
               ? Number(value.cost)
               : NaN;
+          const parsedHoldingDate = typeof value.holdingDate === 'string'
+            ? value.holdingDate
+            : null;
           const parsedDays = typeof value.days === 'number'
             ? value.days
             : typeof value.days === 'string'
@@ -3442,13 +3446,17 @@ export default function HomePage() {
               : NaN;
           const nextShare = Number.isFinite(parsedShare) ? parsedShare : null;
           const nextCost = Number.isFinite(parsedCost) ? parsedCost : null;
-          const nextDays = Number.isFinite(parsedDays) && parsedDays > 0 ? Math.round(parsedDays) : null;
-          if (nextShare === null && nextCost === null && nextDays === null) return acc;
+          const nextHoldingDate = parsedHoldingDate && dayjs(parsedHoldingDate, 'YYYY-MM-DD', true).isValid()
+            ? parsedHoldingDate
+            : (Number.isFinite(parsedDays) && parsedDays > 0
+              ? nowInTz().subtract(Math.round(parsedDays), 'day').format('YYYY-MM-DD')
+              : null);
+          if (nextShare === null && nextCost === null && nextHoldingDate === null) return acc;
           acc[code] = {
             ...value,
             share: nextShare,
             cost: nextCost,
-            days: nextDays
+            holdingDate: nextHoldingDate
           };
           return acc;
         }, {})
@@ -4902,7 +4910,7 @@ export default function HomePage() {
                                 <FundTrendChart 
                                   code={f.code} 
                                   holdingCost={typeof holdings[f.code]?.cost === 'number' ? holdings[f.code].cost : null}
-                                  holdingDays={typeof holdings[f.code]?.days === 'number' ? holdings[f.code].days : null}
+                                  holdingDate={typeof holdings[f.code]?.holdingDate === 'string' ? holdings[f.code].holdingDate : null}
                                   isExpanded={!collapsedTrends.has(f.code)}
                                   onToggleExpand={() => toggleTrendCollapse(f.code)}
                                 />
