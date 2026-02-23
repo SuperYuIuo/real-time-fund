@@ -73,7 +73,12 @@
 
     在 supabase控制台 → Authentication → Email → Confirm sign up，选择 `{{.token}}`。  
 
-4. 目前项目用到的 sql 语句，查看项目 supabase.sql 文件。
+4. 修改验证码位数  
+
+    官方验证码位数默认为8位，可自行修改。常见一般为6位。
+   在 supabase控制台 → Authentication → Sign In / Providers → Auth Providers → email → Minimum password length。
+
+5. 目前项目用到的 sql 语句，查看项目 supabase.sql 文件。
 
 更多 supabase 相关内容查阅官方文档。
 
@@ -136,7 +141,8 @@ docker compose up -d
 - **要求**：基于本项目衍生或修改的作品需以相同协议开源，并保留版权声明与协议全文。
 - **无担保**：软件按「原样」提供，不提供任何明示或暗示的担保。
 
-完整协议文本见仓库根目录 [LICENSE](./LICENSE) 文件，或 [GNU AGPL v3 官方说明](https://www.gnu.org/licenses/agpl-3.0.html)。
+完整协议文本见仓库根目录 [LICENSE](./LICENSE) 文件，或 [GNU AGPL v3 官方说明](https://www.gnu.org/licenses/agpl-3.0.html)。  
 
 ---
+二开或转载需注明出处。  
 Made by [hzm](https://github.com/hzm0321)
