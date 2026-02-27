@@ -613,6 +613,50 @@ input[type="number"] {
   padding-bottom: 60px;
 }
 
+.action-log-card {
+  text-align: left;
+  margin-bottom: 16px;
+  padding: 14px;
+}
+
+.action-log-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.action-log-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.action-log-tag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 40px;
+  margin-right: 8px;
+  padding: 2px 6px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-size: 11px;
+}
+
+@media (max-width: 640px) {
+  .action-log-item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+}
+
 .actions {
   display: inline-flex;
   align-items: center;
