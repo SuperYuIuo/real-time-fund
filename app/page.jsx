@@ -427,6 +427,7 @@ export default function HomePage() {
   const [holdings, setHoldings] = useState({}); // { [code]: { share: number, cost: number } }
   const [pendingTrades, setPendingTrades] = useState([]); // [{ id, fundCode, share, date, ... }]
   const [transactions, setTransactions] = useState({}); // { [code]: [{ id, type, amount, share, price, date, timestamp }] }
+  const [actionLogs, setActionLogs] = useState([]); // [{ id, type, fundCode, fundName, detail, timestamp }]
   const [dcaPlans, setDcaPlans] = useState({}); // { [code]: { amount, feeRate, cycle, firstDate, enabled } }
   const [historyModal, setHistoryModal] = useState({ open: false, fund: null });
   const [addHistoryModal, setAddHistoryModal] = useState({ open: false, fund: null });
@@ -828,6 +829,23 @@ export default function HomePage() {
     setClearConfirm(null);
   };
 
+  const appendActionLog = useCallback((payload) => {
+    if (!payload?.type) return;
+    setActionLogs(prev => {
+      const record = {
+        id: crypto.randomUUID(),
+        type: payload.type,
+        fundCode: payload.fundCode || '',
+        fundName: payload.fundName || '',
+        detail: payload.detail || '',
+        timestamp: payload.timestamp || Date.now()
+      };
+      const next = [record, ...prev].slice(0, 200);
+      window.localStorage.setItem('actionLogs', JSON.stringify(next));
+      return next;
+    });
+  }, []);
+
   const processPendingQueue = async () => {
     const currentPending = pendingTradesRef.current;
     if (currentPending.length === 0) return;
@@ -888,6 +906,15 @@ export default function HomePage() {
             isAfter3pm: trade.isAfter3pm,
             isDca: !!trade.isDca,
             timestamp: Date.now()
+        });
+
+        appendActionLog({
+          type: trade.type,
+          fundCode: trade.fundCode,
+          fundName: trade.fundName,
+          detail: trade.type === 'buy'
+            ? `加仓成交 ¥${Number(trade.amount || 0).toFixed(2)}`
+            : `减仓成交 ${Number(trade.share || 0).toFixed(2)}份`
         });
       }
     }
@@ -954,6 +981,12 @@ export default function HomePage() {
       return nextState;
     });
     showToast('历史记录已添加', 'success');
+    appendActionLog({
+      type: 'history',
+      fundCode,
+      fundName: addHistoryModal.fund?.name,
+      detail: `${data.type === 'buy' ? '补录买入' : '补录卖出'} ${data.date}`
+    });
     setAddHistoryModal({ open: false, fund: null });
   };
 
@@ -979,6 +1012,12 @@ export default function HomePage() {
         const next = [...pendingTrades, pending];
         setPendingTrades(next);
         storageHelper.setItem('pendingTrades', JSON.stringify(next));
+        appendActionLog({
+          type: 'buy',
+          fundCode: fund.code,
+          fundName: fund.name,
+          detail: `加仓申请 ¥${Number(data.totalCost || 0).toFixed(2)}（待净值）`
+        });
 
         setTradeModal({ open: false, fund: null, type: 'buy' });
         showToast('净值暂未更新，已加入待处理队列', 'info');
@@ -1028,7 +1067,30 @@ export default function HomePage() {
       return nextState;
     });
 
+    appendActionLog({
+      type: isBuy ? 'buy' : 'sell',
+      fundCode: fund.code,
+      fundName: fund.name,
+      detail: isBuy
+        ? `加仓 ¥${Number(data.totalCost || 0).toFixed(2)}（${data.share.toFixed(2)}份）`
+        : `减仓 ${data.share.toFixed(2)}份`
+    });
+
     setTradeModal({ open: false, fund: null, type: 'buy' });
+  };
+
+  const actionLogsForDisplay = useMemo(() => {
+    return [...actionLogs]
+      .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0))
+      .slice(0, 20);
+  }, [actionLogs]);
+
+  const getActionLogLabel = (type) => {
+    if (type === 'buy') return '加仓';
+    if (type === 'sell') return '减仓';
+    if (type === 'revoke') return '撤销';
+    if (type === 'history') return '补录';
+    return '操作';
   };
 
   const handleMouseDown = (e) => {
@@ -1863,6 +1925,10 @@ export default function HomePage() {
       const savedTransactions = JSON.parse(localStorage.getItem('transactions') || '{}');
       if (isPlainObject(savedTransactions)) {
         setTransactions(savedTransactions);
+      }
+      const savedActionLogs = JSON.parse(localStorage.getItem('actionLogs') || '[]');
+      if (Array.isArray(savedActionLogs)) {
+        setActionLogs(savedActionLogs);
       }
       const savedDcaPlans = JSON.parse(localStorage.getItem('dcaPlans') || '{}');
       if (isPlainObject(savedDcaPlans)) {
@@ -4392,6 +4458,29 @@ export default function HomePage() {
       </AnimatePresence>
 
       <div className="footer">
+        <div className="glass card action-log-card">
+          <div className="row" style={{ justifyContent: 'space-between', marginBottom: 10 }}>
+            <div style={{ fontWeight: 700 }}>操作时间记录</div>
+            <div className="muted" style={{ fontSize: 12 }}>最近 {actionLogsForDisplay.length} 条</div>
+          </div>
+          {actionLogsForDisplay.length === 0 ? (
+            <div className="muted" style={{ fontSize: 12 }}>暂无操作记录（加仓/减仓/撤销等会显示在这里）</div>
+          ) : (
+            <div className="action-log-list">
+              {actionLogsForDisplay.map((item) => (
+                <div key={item.id} className="action-log-item">
+                  <div>
+                    <span className="action-log-tag">{getActionLogLabel(item.type)}</span>
+                    <span>{item.fundName || item.fundCode || '未命名基金'}</span>
+                    {item.detail ? <span className="muted"> · {item.detail}</span> : null}
+                  </div>
+                  <div className="muted" style={{ fontSize: 12 }}>{toTz(item.timestamp).format('MM-DD HH:mm:ss')}</div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
         <p style={{ marginBottom: 8 }}>数据源：实时估值与重仓直连东方财富，仅供个人学习及参考使用。数据可能存在延迟，不作为任何投资建议</p>
         <p style={{ marginBottom: 12 }}>注：估算数据与真实结算数据会有1%左右误差，非股票型基金误差较大</p>
         <div style={{ marginTop: 12, opacity: 0.8, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
@@ -4495,8 +4584,17 @@ export default function HomePage() {
             pendingTrades={pendingTrades}
             onDeletePending={(id) => {
                 setPendingTrades(prev => {
+                    const target = prev.find(t => t.id === id);
                     const next = prev.filter(t => t.id !== id);
                     storageHelper.setItem('pendingTrades', JSON.stringify(next));
+                    if (target) {
+                      appendActionLog({
+                        type: 'revoke',
+                        fundCode: target.fundCode,
+                        fundName: target.fundName,
+                        detail: `撤销${target.type === 'buy' ? '加仓' : '减仓'}申请`
+                      });
+                    }
                     return next;
                 });
                 showToast('已撤销待处理交易', 'success');
@@ -4559,8 +4657,17 @@ export default function HomePage() {
             onAddHistory={() => setAddHistoryModal({ open: true, fund: historyModal.fund })}
             onDeletePending={(id) => {
                 setPendingTrades(prev => {
+                    const target = prev.find(t => t.id === id);
                     const next = prev.filter(t => t.id !== id);
                     storageHelper.setItem('pendingTrades', JSON.stringify(next));
+                    if (target) {
+                      appendActionLog({
+                        type: 'revoke',
+                        fundCode: target.fundCode,
+                        fundName: target.fundName,
+                        detail: `撤销${target.type === 'buy' ? '加仓' : '减仓'}申请`
+                      });
+                    }
                     return next;
                 });
                 showToast('已撤销待处理交易', 'success');
