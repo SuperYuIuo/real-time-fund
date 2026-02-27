@@ -1414,8 +1414,12 @@ export default function HomePage() {
     try {
       const list = JSON.parse(value || '[]');
       if (!Array.isArray(list)) return '';
-      const codes = list.map((item) => item?.code).filter(Boolean);
-      return Array.from(new Set(codes)).join('|');
+      const items = list.map((item) => {
+        if (!item?.code) return null;
+        // 加入 jzrq 和 dwjz 以检测净值更新
+        return `${item.code}:${item.jzrq || ''}:${item.dwjz || ''}`;
+      }).filter(Boolean);
+      return Array.from(new Set(items)).join('|');
     } catch (e) {
       return '';
     }
@@ -4289,12 +4293,22 @@ export default function HomePage() {
                                     基于 {Math.round(f.estPricedCoverage * 100)}% 持仓估算
                                   </div>
                                 )}
-                                {Array.isArray(valuationSeries[f.code]) && valuationSeries[f.code].length >= 2 && (
-                                  <FundIntradayChart
-                                    series={valuationSeries[f.code]}
-                                    referenceNav={f.dwjz != null ? Number(f.dwjz) : undefined}
-                                  />
-                                )}
+                                {(() => {
+                                  const showIntraday = Array.isArray(valuationSeries[f.code]) && valuationSeries[f.code].length >= 2;
+                                  if (!showIntraday) return null;
+                                  
+                                  // 如果今日日期大于估值日期，说明是历史估值，不显示分时图
+                                  if (f.gztime && toTz(todayStr).startOf('day').isAfter(toTz(f.gztime).startOf('day'))) {
+                                    return null;
+                                  }
+
+                                  return (
+                                    <FundIntradayChart
+                                      series={valuationSeries[f.code]}
+                                      referenceNav={f.dwjz != null ? Number(f.dwjz) : undefined}
+                                    />
+                                  );
+                                })()}
                                 <div
                                   style={{ marginBottom: 8, cursor: 'pointer', userSelect: 'none' }}
                                   className="title"
