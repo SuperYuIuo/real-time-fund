@@ -640,14 +640,27 @@ export default function HomePage() {
 
   // 过滤和排序后的基金列表
   const displayFunds = useMemo(
-    () => funds
-      .filter(f => {
+    () => {
+      let filtered = funds.filter(f => {
         if (currentTab === 'all') return true;
         if (currentTab === 'fav') return favorites.has(f.code);
         const group = groups.find(g => g.id === currentTab);
         return group ? group.codes.includes(f.code) : true;
-      })
-      .sort((a, b) => {
+      });
+
+      if (currentTab !== 'all' && currentTab !== 'fav' && sortBy === 'default') {
+        const group = groups.find(g => g.id === currentTab);
+        if (group && group.codes) {
+          const codeMap = new Map(group.codes.map((code, index) => [code, index]));
+          filtered.sort((a, b) => {
+            const indexA = codeMap.get(a.code) ?? Number.MAX_SAFE_INTEGER;
+            const indexB = codeMap.get(b.code) ?? Number.MAX_SAFE_INTEGER;
+            return indexA - indexB;
+          });
+        }
+      }
+
+      return filtered.sort((a, b) => {
         if (sortBy === 'yield') {
           const valA = isNumber(a.estGszzl) ? a.estGszzl : (a.gszzl ?? a.zzl ?? 0);
           const valB = isNumber(b.estGszzl) ? b.estGszzl : (b.gszzl ?? a.zzl ?? 0);
@@ -664,7 +677,8 @@ export default function HomePage() {
           return sortOrder === 'asc' ? a.name.localeCompare(b.name, 'zh-CN') : b.name.localeCompare(a.name, 'zh-CN');
         }
         return 0;
-      }),
+      });
+    },
     [funds, currentTab, favorites, groups, sortBy, sortOrder, holdings, getHoldingProfit],
   );
 
@@ -1401,7 +1415,7 @@ export default function HomePage() {
       const list = JSON.parse(value || '[]');
       if (!Array.isArray(list)) return '';
       const codes = list.map((item) => item?.code).filter(Boolean);
-      return Array.from(new Set(codes)).sort().join('|');
+      return Array.from(new Set(codes)).join('|');
     } catch (e) {
       return '';
     }
@@ -1729,6 +1743,60 @@ export default function HomePage() {
     });
     setGroups(next);
     storageHelper.setItem('groups', JSON.stringify(next));
+  };
+
+  const handleReorder = (oldIndex, newIndex) => {
+    const movedItem = displayFunds[oldIndex];
+    const targetItem = displayFunds[newIndex];
+    if (!movedItem || !targetItem) return;
+
+    if (currentTab === 'all' || currentTab === 'fav') {
+      const newFunds = [...funds];
+      const fromIndex = newFunds.findIndex(f => f.code === movedItem.code);
+
+      if (fromIndex === -1) return;
+
+      // Remove moved item
+      const [removed] = newFunds.splice(fromIndex, 1);
+
+      // Find target index in the array (after removal)
+      const toIndex = newFunds.findIndex(f => f.code === targetItem.code);
+
+      if (toIndex === -1) {
+        // If target not found (should not happen), put it back
+        newFunds.splice(fromIndex, 0, removed);
+        return;
+      }
+
+      if (oldIndex < newIndex) {
+        // Moving down, insert after target
+        newFunds.splice(toIndex + 1, 0, removed);
+      } else {
+        // Moving up, insert before target
+        newFunds.splice(toIndex, 0, removed);
+      }
+
+      setFunds(newFunds);
+      storageHelper.setItem('funds', JSON.stringify(newFunds));
+    } else {
+      const groupIndex = groups.findIndex(g => g.id === currentTab);
+      if (groupIndex > -1) {
+        const group = groups[groupIndex];
+        const newCodes = [...group.codes];
+        const fromIndex = newCodes.indexOf(movedItem.code);
+        const toIndex = newCodes.indexOf(targetItem.code);
+
+        if (fromIndex !== -1 && toIndex !== -1) {
+          newCodes.splice(fromIndex, 1);
+          newCodes.splice(toIndex, 0, movedItem.code);
+
+          const newGroups = [...groups];
+          newGroups[groupIndex] = { ...group, codes: newCodes };
+          setGroups(newGroups);
+          storageHelper.setItem('groups', JSON.stringify(newGroups));
+        }
+      }
+    }
   };
 
   // 按 code 去重，保留第一次出现的项，避免列表重复
@@ -3743,6 +3811,8 @@ export default function HomePage() {
                                 refreshing={refreshing}
                                 currentTab={currentTab}
                                 favorites={favorites}
+                                sortBy={sortBy}
+                                onReorder={handleReorder}
                                 onRemoveFund={(row) => {
                                   if (refreshing) return;
                                   if (!row || !row.code) return;
